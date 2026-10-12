@@ -1,0 +1,100 @@
+[package]
+name = "shx"
+# 应用的版本号以 package.json 为准（见 tauri.conf.json），这里的不用跟着改。
+version = "0.1.0"
+description = "SSH terminal and SFTP file manager"
+edition = "2021"
+license = "Apache-2.0"
+# 这是一个应用，不是给别人用的库：防止被误发布到 crates.io。
+publish = false
+
+[lib]
+# `_lib` 后缀看似多余，但必须有：库名要唯一，不能和可执行文件重名。
+# 这个问题似乎只在 Windows 上出现，见 https://github.com/rust-lang/cargo/issues/8519
+#
+# 只作为普通的库链接进可执行文件。要构建移动端（`tauri android` / `tauri ios`）的话，
+# 需要在这里加上 crate-type = ["staticlib", "cdylib", "rlib"]。
+name = "shx_lib"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# 应用框架和插件
+tauri = { version = "2", features = [] }
+tauri-plugin-clipboard-manager = "2.4.1"
+tauri-plugin-dialog = "2.8.1"
+tauri-plugin-opener = "2"
+# 应用更新：检查并安装 GitHub Releases 上的新版本，装完后重启
+tauri-plugin-process = "2.4.0"
+tauri-plugin-updater = "2.13.3"
+
+# SSH 与 SFTP
+russh = { version = "0.64.1", default-features = false, features = ["flate2", "ring", "rsa"] }
+russh-sftp = "3.0.1"
+
+# 异步运行时。运行时本身由 Tauri 提供，这里只列出代码里直接用到的部分。
+futures = "0.3.34"
+tokio = { version = "1.53.2", features = ["rt", "macros", "sync", "time", "fs", "io-util"] }
+
+# 备份文件的加密
+chacha20poly1305 = "0.11.0"
+getrandom = "0.4.3"
+
+# 其他
+dirs = "7.0.0"
+parking_lot = "0.12.5"
+serde = { version = "1", features = ["derive"] }
+# tauri.conf.json 里有插件配置（更新）时，Tauri 生成的代码要用到
+serde_json = "1"
+thiserror = "2.0.21"
+uuid = { version = "1.28.0", features = ["v4"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSApplication", "NSMenu", "NSMenuItem", "NSResponder"] }
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSString", "NSUserDefaults"] }
+
+[profile.dev]
+debug = 0
+incremental = true
+
+# 开发构建里把依赖优化掉，自己的代码照旧不优化：SSH 协议和加密都在依赖里，
+# 实测传输吞吐因此快了约 1.7 倍，而改完自己的代码重新编译仍然一样快。
+# 代价是依赖要按这个设置重新编译一遍，只有头一次。
+[profile.dev.package."*"]
+opt-level = 2
+
+# 体积优化说明见 https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+# 整体按体积优化；传输时每个字节都要经过的那些库在下面单独按速度优化。
+opt-level = "z"
+panic = "abort"
+strip = "symbols"
+debug = 0
+incremental = false
+
+# SSH 协议、加密和压缩：按速度优化。它们让程序大了约 0.3 MB，换来传输速度不受影响。
+[profile.release.package]
+russh = { opt-level = 3 }
+russh-sftp = { opt-level = 3 }
+russh-cryptovec = { opt-level = 3 }
+aes = { opt-level = 3 }
+aes-gcm = { opt-level = 3 }
+ghash = { opt-level = 3 }
+polyval = { opt-level = 3 }
+ctr = { opt-level = 3 }
+cipher = { opt-level = 3 }
+chacha20 = { opt-level = 3 }
+poly1305 = { opt-level = 3 }
+chacha20poly1305 = { opt-level = 3 }
+universal-hash = { opt-level = 3 }
+aead = { opt-level = 3 }
+sha1 = { opt-level = 3 }
+sha2 = { opt-level = 3 }
+hmac = { opt-level = 3 }
+flate2 = { opt-level = 3 }
+miniz_oxide = { opt-level = 3 }
+zlib-rs = { opt-level = 3 }

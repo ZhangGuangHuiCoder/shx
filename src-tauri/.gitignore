@@ -1,0 +1,5 @@
+# Cargo 生成：编译产物和可执行文件
+/target/
+
+# Tauri 生成：用于 capabilities 自动补全的 schema 文件
+/gen/schemas

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/src/assets/logo.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>shx</title>
+    <!-- 脚本和样式还没加载时就定好底色：窗口一露面就是界面的背景色，而不是白的。
+         颜色同 styles.css 里的背景色，主题的判断同 shared/theme.ts。 -->
+    <style>
+      html {
+        background: #14161a;
+      }
+
+      html[data-theme="light"] {
+        background: #f4f7fb;
+      }
+    </style>
+    <script>
+      try {
+        var theme = JSON.parse(localStorage.getItem("shx.settings") || "{}").theme;
+        if (theme === "auto") theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.dataset.theme = theme === "light" ? "light" : "dark";
+      } catch (e) {
+        // 读不到保存的设置就用默认的深色。
+      }
+    </script>
+  </head>
+
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
