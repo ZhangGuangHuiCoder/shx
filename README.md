@@ -18,8 +18,8 @@ window. No account, no cloud: everything is stored on your machine.
 
 - **Terminal** — xterm.js with search, and optional keep-alive: the shell runs in tmux on the
   server, so programs survive a dropped connection. One host can hold several sessions.
-- **Files** — an SFTP file manager that follows the terminal's `cd`, with a folder tree, permissions,
-  compress and extract, and a built-in Monaco editor.
+- **Files** — an SFTP file manager that follows the terminal's `cd`, with a folder tree, favorite
+  folders, permissions, compress and extract, and a built-in Monaco editor.
 - **Transfers** — a queue for uploads and downloads with pause, resume and retry; folders can be
   packed on the server and downloaded as one archive.
 - **Command assistant** — nearly 300 built-in commands in 15 groups, with search, favourites and
@@ -79,3 +79,6 @@ Tauri 2 · Rust · russh · russh-sftp · tokio · Vue 3 · Pinia · Naive UI ·
 ## License
 
 [Apache-2.0](LICENSE)
+
+The bundled monospace font, [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono), is licensed
+under the [SIL Open Font License 1.1](public/licenses/JetBrainsMono-OFL.txt).

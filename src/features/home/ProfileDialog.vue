@@ -32,7 +32,8 @@ const pastedName = ref("");
 
 watch(show, (visible) => {
   if (!visible) return;
-  // 以空白表单为底，清掉被编辑的配置中没有设置的可选字段。
+  // 以空白表单为底，清掉被编辑的配置中没有设置的可选字段（上一次编辑的主机留下的）。
+  for (const key of Object.keys(form)) Reflect.deleteProperty(form, key);
   Object.assign(form, blank(), props.profile ? { ...props.profile } : {});
   secret.value = "";
   pasting.value = false;
@@ -273,7 +274,7 @@ function save() {
 
 .sep {
   color: var(--text-dim);
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-weight: 600;
 }
 
@@ -306,7 +307,7 @@ function save() {
 }
 
 .mono :deep(textarea) {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.6;
 }

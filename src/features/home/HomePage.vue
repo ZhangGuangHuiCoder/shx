@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import {
-  ArrowRight, ChevronRight, Copy, Fingerprint, GripVertical, HeartPulse, KeyRound, LoaderCircle, LockKeyhole, MoreVertical, Moon, Palette, Pencil,
+  ArrowRight, ChevronRight, Copy, Fingerprint, GripVertical, HeartPulse, KeyRound, LockKeyhole, MoreVertical, Moon, Palette, Pencil,
   Pin, PinOff, Plus, Search, SearchX, Sun, SunMoon, TerminalSquare, Trash2,
 } from "@lucide/vue";
 import draggable from "vuedraggable";
-import { NInput } from "naive-ui";
+import { NButton, NInput } from "naive-ui";
 import { computed, onBeforeUnmount, onMounted, ref, type Component } from "vue";
 import logoUrl from "../../assets/logo.svg";
 import type { AuthKind, Profile } from "../../shared/api";
 import BrandSlogan from "../../shared/components/BrandSlogan.vue";
+import IconButton from "../../shared/components/IconButton.vue";
 import { openContextMenu, type MenuEntry } from "../../shared/contextMenu";
 import { t } from "../../shared/i18n";
 import { THEME_SETTINGS } from "../../shared/theme";
@@ -219,16 +220,13 @@ function onReorder(group: ViewGroup) {
         </NInput>
       </div>
       <div class="top-actions" :data-tauri-drag-region="drag">
-        <button class="btn primary" @click="edit(null)">
-          <Plus :size="15" :stroke-width="2.4" />{{ t("sidebar.new") }}
-        </button>
-        <button class="theme-toggle" type="button"
-          :title="t('theme.switch', { name: t(`theme.${app.settings.theme}`) })" @click="cycleTheme">
-          <Transition name="swap" mode="out-in">
-            <component :is="THEME_ICON[app.settings.theme]" :key="app.settings.theme" :size="16"
-              :class="app.settings.theme" />
-          </Transition>
-        </button>
+        <NButton type="primary" @click="edit(null)">
+          <template #icon><Plus :size="16" /></template>
+          {{ t("sidebar.new") }}
+        </NButton>
+        <NButton circle :title="t('theme.switch', { name: t(`theme.${app.settings.theme}`) })" @click="cycleTheme">
+          <template #icon><component :is="THEME_ICON[app.settings.theme]" :size="16" /></template>
+        </NButton>
       </div>
     </header>
 
@@ -239,9 +237,10 @@ function onReorder(group: ViewGroup) {
           <div class="empty-art"><img :src="logoUrl" alt="" /></div>
           <h2>{{ t("home.emptyTitle") }}</h2>
           <p>{{ t("home.emptyBody") }}</p>
-          <button class="btn primary big" @click="edit(null)">
-            <Plus :size="16" /> {{ t("sidebar.new") }}
-          </button>
+          <NButton class="first-host" type="primary" size="large" @click="edit(null)">
+            <template #icon><Plus :size="16" /></template>
+            {{ t("sidebar.new") }}
+          </NButton>
         </section>
 
         <template v-else>
@@ -259,7 +258,7 @@ function onReorder(group: ViewGroup) {
           <section v-if="!groups.length" class="empty no-match">
             <SearchX :size="36" :stroke-width="1.4" />
             <p>{{ t("sidebar.noMatch") }}</p>
-            <button class="btn" @click="query = ''">{{ t("home.clearSearch") }}</button>
+            <NButton @click="query = ''">{{ t("home.clearSearch") }}</NButton>
           </section>
 
           <section v-for="group in groups" :key="group.name" class="group-section">
@@ -283,11 +282,11 @@ function onReorder(group: ViewGroup) {
                     <div class="avatar">
                       <component :is="resolveHostIcon(element.icon)" v-if="resolveHostIcon(element.icon)" :size="22"
                         :stroke-width="1.9" />
-                      <span v-else class="initial">{{ (element.name.trim()[0] || "?").toUpperCase() }}</span>
-                      <button class="avatar-edit" type="button" :title="t('profile.customize')"
+                      <span v-else>{{ (element.name.trim()[0] || "?").toUpperCase() }}</span>
+                      <NButton class="avatar-edit" circle size="tiny" type="primary" :title="t('profile.customize')"
                         @click.stop="picking = element" @dblclick.stop>
-                        <Pencil :size="10" />
-                      </button>
+                        <template #icon><Pencil :size="11" /></template>
+                      </NButton>
                     </div>
                     <div class="meta">
                       <div class="name-line">
@@ -309,25 +308,22 @@ function onReorder(group: ViewGroup) {
                     <span v-if="sessions.has(element.id)" class="chip live"><i class="pulse" />{{ t("home.sessions", {
                       count: sessions.get(element.id)! }) }}</span>
                     <span class="ellipsis note">{{ element.note || (group.pinned ? element.group : "") }}</span>
-                    <span v-if="connecting.has(element.id)" class="go busy">
-                      <LoaderCircle :size="12" class="spin" />{{ t("home.connecting") }}
-                    </span>
-                    <button v-else class="go" type="button" tabindex="-1" @click.stop="app.openTab(element)"
-                      @dblclick.stop>
-                      {{ t("sidebar.connect") }}
-                      <ArrowRight :size="12" />
-                    </button>
+                    <!-- 连接进行中时转圈、点了没反应；这时它一直显示，不管鼠标在不在卡片上。 -->
+                    <NButton class="go" :class="{ busy: connecting.has(element.id) }" size="tiny" type="primary" secondary
+                      icon-placement="right" :loading="connecting.has(element.id)" :focusable="false"
+                      @click.stop="app.openTab(element)" @dblclick.stop>
+                      <template #icon><ArrowRight :size="12" /></template>
+                      {{ t(connecting.has(element.id) ? "home.connecting" : "sidebar.connect") }}
+                    </NButton>
                   </div>
 
                   <div class="tools" @dblclick.stop>
-                    <button v-if="canDrag" class="drag-handle icon-btn" type="button" tabindex="-1"
-                      :title="t('home.dragHandle')">
+                    <IconButton v-if="canDrag" class="drag-handle" size="tiny" :focusable="false" :title="t('home.dragHandle')">
                       <GripVertical :size="14" />
-                    </button>
-                    <button class="icon-btn" type="button" :title="t('common.more')"
-                      @click.stop="openCardMenu($event, element)">
+                    </IconButton>
+                    <IconButton size="tiny" :title="t('common.more')" @click.stop="openCardMenu($event, element)">
                       <MoreVertical :size="15" />
-                    </button>
+                    </IconButton>
                   </div>
                 </div>
               </template>
@@ -411,51 +407,6 @@ function onReorder(group: ViewGroup) {
   gap: 8px;
 }
 
-/* 旁边按钮的低调搭档：尺寸和圆角相同，画成输入框的样子。 */
-.theme-toggle {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--bg-raised);
-  color: var(--text-dim);
-  cursor: pointer;
-  transition: border-color 0.12s, color 0.12s;
-}
-
-.theme-toggle:hover {
-  border-color: var(--accent-border);
-  color: var(--text);
-}
-
-.theme-toggle:active {
-  background: var(--bg-hover);
-}
-
-.theme-toggle .light,
-.theme-toggle:hover .light {
-  color: var(--pin);
-}
-
-/* 图标以四分之一圈的旋转互换位置。 */
-.swap-enter-active,
-.swap-leave-active {
-  transition: opacity 0.12s, transform 0.12s;
-}
-
-.swap-enter-from {
-  opacity: 0;
-  transform: rotate(-70deg) scale(0.6);
-}
-
-.swap-leave-to {
-  opacity: 0;
-  transform: rotate(70deg) scale(0.6);
-}
-
 .key {
   font-family: inherit;
   font-size: 11px;
@@ -465,54 +416,6 @@ function onReorder(group: ViewGroup) {
   border: 1px solid var(--border);
   background: var(--bg-raised);
   color: var(--text-dim);
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 14px;
-  border-radius: 9px;
-  border: 1px solid var(--border);
-  background: var(--bg-raised);
-  color: var(--text);
-  font: inherit;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background 0.12s, border-color 0.12s, filter 0.12s;
-}
-
-.btn:hover {
-  background: var(--bg-hover);
-}
-
-/* 像从上方打光，而不是自己发光：自上而下的柔和渐变、明亮的上边缘，
-   以及下方一道紧贴的阴影。 */
-.btn.primary {
-  padding: 0 15px 0 11px;
-  border: 0;
-  background: linear-gradient(180deg, var(--accent-hover), var(--accent) 60%, var(--accent-pressed));
-  color: #fff;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 30%),
-    0 1px 2px rgb(20 70 140 / 35%);
-}
-
-.btn.primary:hover {
-  filter: brightness(1.07);
-}
-
-.btn.primary:active {
-  filter: brightness(0.94);
-}
-
-.btn.big {
-  height: 38px;
-  padding: 0 22px 0 18px;
-  margin-top: 10px;
 }
 
 /* ---- 页面 ---- */
@@ -582,6 +485,10 @@ function onReorder(group: ViewGroup) {
 }
 
 /* ---- 空状态 ---- */
+
+.first-host {
+  margin-top: 10px;
+}
 
 .empty {
   margin-top: 96px;
@@ -679,7 +586,7 @@ function onReorder(group: ViewGroup) {
 
 .pin-mark {
   flex-shrink: 0;
-  color: var(--pin);
+  color: var(--accent);
 }
 
 .grid {
@@ -789,31 +696,17 @@ function onReorder(group: ViewGroup) {
   border: 2px solid var(--bg-raised);
 }
 
+/* 头像角上的“自定义”按钮：悬停在卡片上时才出现。 */
 .avatar-edit {
   position: absolute;
-  right: -5px;
-  bottom: -5px;
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border-radius: 50%;
-  border: 2px solid var(--bg-raised);
-  background: var(--text);
-  color: var(--bg);
+  right: -7px;
+  bottom: -7px;
   opacity: 0;
-  cursor: pointer;
-  transition: opacity 0.12s, transform 0.12s;
 }
 
 .card:hover .avatar-edit,
 .avatar-edit:focus-visible {
   opacity: 1;
-}
-
-.avatar-edit:hover {
-  transform: scale(1.15);
 }
 
 .meta {
@@ -837,7 +730,7 @@ function onReorder(group: ViewGroup) {
 
 .addr {
   margin-top: 2px;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 11.5px;
   line-height: 16px;
   color: var(--text-dim);
@@ -892,24 +785,10 @@ function onReorder(group: ViewGroup) {
   color: var(--text-dim);
 }
 
+/* “连接”按钮：悬停在卡片上时才出现。 */
 .go {
   flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  height: 22px;
-  padding: 0 6px 0 9px;
-  border: 0;
-  border-radius: 11px;
-  background: var(--tint-soft);
-  color: var(--tint-text);
-  font: inherit;
-  font-size: 11.5px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
   opacity: 0;
-  transition: opacity 0.15s, background 0.12s, color 0.12s;
 }
 
 .card:hover .go,
@@ -918,25 +797,12 @@ function onReorder(group: ViewGroup) {
   opacity: 1;
 }
 
-button.go:hover {
-  background: var(--tint);
-  color: #fff;
-}
-
-/* 正在进行的连接始终显示，无论是否悬停。 */
 .go.busy {
-  gap: 5px;
-  padding: 0 9px 0 7px;
   opacity: 1;
-  cursor: default;
 }
 
 .card.busy {
   border-color: hsl(var(--h) 45% 60% / 45%);
-}
-
-.spin {
-  animation: spin 0.8s linear infinite;
 }
 
 .tools {
@@ -959,13 +825,6 @@ button.go:hover {
   opacity: 1;
 }
 
-.tools .icon-btn {
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
-  padding: 0;
-}
-
 .drag-handle {
   cursor: grab;
   touch-action: none;
@@ -973,10 +832,6 @@ button.go:hover {
 
 .drag-handle:active {
   cursor: grabbing;
-}
-
-.card-drag .drag-handle {
-  color: var(--tint-text);
 }
 
 /* ---- 页脚提示 ---- */
@@ -996,12 +851,6 @@ button.go:hover {
   align-items: center;
   gap: 7px;
   white-space: nowrap;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 @keyframes card-in {
@@ -1048,10 +897,7 @@ button.go:hover {
   }
 
   .card,
-  .go,
-  .chevron,
-  .swap-enter-active,
-  .swap-leave-active {
+  .chevron {
     transition: none;
   }
 }

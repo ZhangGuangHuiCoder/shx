@@ -5,6 +5,7 @@ import { openAssistant } from "../features/commands/commandAssistant";
 import { slotOf } from "../features/session/keepAlive";
 import TransferPanel from "../features/transfer/TransferPanel.vue";
 import TransferStatus from "../features/transfer/TransferStatus.vue";
+import IconButton from "../shared/components/IconButton.vue";
 import { contextMenu, openContextMenu, type MenuEntry } from "../shared/contextMenu";
 import { t } from "../shared/i18n";
 import { THEME_SETTINGS } from "../shared/theme";
@@ -110,7 +111,7 @@ function chooseActions(event: MouseEvent) {
     <TransferPanel v-if="transfersOpen" />
     <div class="bar" @contextmenu="chooseActions">
       <template v-if="tab">
-        <span class="item"><i class="dot" :class="tab.status" />{{ t(`status.${tab.status}`) }}</span>
+        <span class="item"><i class="status-dot" :class="tab.status" />{{ t(`status.${tab.status}`) }}</span>
         <span v-if="address" class="item dim address"><span class="ellipsis">{{ address }}</span></span>
         <!-- 开了保活的主机：终端是否真的进了 tmux 会话，连上之后才知道。 -->
         <span
@@ -124,21 +125,21 @@ function chooseActions(event: MouseEvent) {
       </template>
       <template v-else>
         <span class="item dim">{{ app.profiles.length }} {{ t("home.stat.hosts") }}</span>
-        <span v-if="sessionCount" class="item"><i class="dot connected" />{{ sessionCount }} {{ t("home.stat.sessions") }}</span>
+        <span v-if="sessionCount" class="item"><i class="status-dot connected" />{{ sessionCount }} {{ t("home.stat.sessions") }}</span>
       </template>
       <span class="spacer" />
       <div v-if="shownActions.length" class="actions">
-        <button
+        <IconButton
           v-for="action in shownActions"
           :key="action.id"
-          class="icon-btn"
-          :class="{ on: action.on }"
+          size="tiny"
+          :type="action.on ? 'primary' : 'default'"
           :title="action.title ?? action.label"
           @mousedown="rememberMenu"
           @click="action.run"
         >
           <component :is="action.icon" :size="14" />
-        </button>
+        </IconButton>
       </div>
       <TransferStatus v-model:open="transfersOpen" />
     </div>
@@ -187,26 +188,5 @@ function chooseActions(event: MouseEvent) {
   align-items: center;
   gap: 2px;
   padding: 0 6px;
-}
-
-.actions .icon-btn {
-  height: 20px;
-  min-width: 24px;
-}
-
-.dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  background: var(--pin);
-}
-
-.dot.connected {
-  background: var(--ok);
-}
-
-.dot.closed {
-  background: var(--danger);
 }
 </style>

@@ -2,9 +2,10 @@
 // 命令助手：左侧是分组，右侧是分组里的命令，选中一条就填到终端的命令行上。
 // 每条命令都可以修改、删除和收藏，也可以新建。只在 App.vue 中挂载一次，通过 `openAssistant` 打开。
 import { Pencil, Play, Plus, RotateCcw, Search, SearchX, SquareTerminal, Star, Trash2, X } from "@lucide/vue";
-import { NModal } from "naive-ui";
+import { NButton, NModal } from "naive-ui";
 import { computed, nextTick, ref, watch } from "vue";
 import DialogHeader from "../../shared/components/DialogHeader.vue";
+import IconButton from "../../shared/components/IconButton.vue";
 import { shortcut } from "../../shared/contextMenu";
 import { locale, t } from "../../shared/i18n";
 import { confirm } from "../../shared/ui";
@@ -215,10 +216,13 @@ function onKey(e: KeyboardEvent) {
             <label class="search">
               <Search :size="16" />
               <input ref="searchInput" v-model="query" type="text" autofocus :placeholder="t('cmd.search')" />
-              <button v-if="query" class="clear" type="button" tabindex="-1" @click="query = ''"><X :size="12" :stroke-width="2.4" /></button>
+              <IconButton v-if="query" size="tiny" :focusable="false" @click="query = ''"><X :size="13" /></IconButton>
             </label>
-            <button class="new" type="button" @click="add()"><Plus :size="14" :stroke-width="2.2" /> {{ t("cmd.new") }}</button>
-            <button class="icon-btn" type="button" :title="t('common.close')" @click="close"><X :size="16" /></button>
+            <NButton type="primary" secondary @click="add()">
+              <template #icon><Plus :size="15" /></template>
+              {{ t("cmd.new") }}
+            </NButton>
+            <IconButton :title="t('common.close')" @click="close"><X :size="16" /></IconButton>
           </DialogHeader>
 
           <div class="panes">
@@ -229,9 +233,10 @@ function onKey(e: KeyboardEvent) {
                 <div class="none-tile"><SearchX :size="22" :stroke-width="1.7" /></div>
                 <div class="none-title">{{ t(total ? "cmd.noMatch" : "cmd.empty") }}</div>
                 <div v-if="total" class="dim">{{ t("cmd.noMatchHint") }}</div>
-                <button class="new" type="button" @click="add(query.trim())">
-                  <Plus :size="14" :stroke-width="2.2" /> {{ query.trim() ? t("cmd.newFrom", { text: query.trim() }) : t("cmd.new") }}
-                </button>
+                <NButton class="none-new" type="primary" secondary @click="add(query.trim())">
+                  <template #icon><Plus :size="15" /></template>
+                  {{ query.trim() ? t("cmd.newFrom", { text: query.trim() }) : t("cmd.new") }}
+                </NButton>
               </div>
 
               <section v-for="(group, g) in groups" :key="group.key">
@@ -257,31 +262,28 @@ function onKey(e: KeyboardEvent) {
                   <!-- 宽度固定：按钮出现和消失时，左边的文字不跟着伸缩。 -->
                   <div class="actions">
                     <template v-if="offsets[g] + i === active">
-                      <button
+                      <IconButton
                         v-if="assistant.use && !hasPlaceholder(item.command)"
-                        class="act run"
-                        type="button"
-                        tabindex="-1"
+                        type="primary"
+                        :focusable="false"
                         :title="t('cmd.run')"
                         @click.stop="send(item, true)"
                       >
                         <Play :size="14" />
-                      </button>
-                      <button class="act" type="button" tabindex="-1" :title="t('common.edit')" @click.stop="edit(item)"><Pencil :size="14" /></button>
-                      <button class="act danger" type="button" tabindex="-1" :title="t('common.delete')" @click.stop="remove(item)"><Trash2 :size="14" /></button>
+                      </IconButton>
+                      <IconButton :focusable="false" :title="t('common.edit')" @click.stop="edit(item)"><Pencil :size="14" /></IconButton>
+                      <IconButton type="error" :focusable="false" :title="t('common.delete')" @click.stop="remove(item)"><Trash2 :size="14" /></IconButton>
                     </template>
                     <!-- 放在最右边、各行对齐；收藏了的一直显示，其余的只在当前行上显示。 -->
-                    <button
+                    <IconButton
                       v-if="offsets[g] + i === active || starred.has(item.id)"
-                      class="act star"
-                      :class="{ on: starred.has(item.id) }"
-                      type="button"
-                      tabindex="-1"
+                      :type="starred.has(item.id) ? 'primary' : 'default'"
+                      :focusable="false"
                       :title="t(starred.has(item.id) ? 'cmd.unfavorite' : 'cmd.favorite')"
                       @click.stop="favorite(item, $event)"
                     >
                       <Star :size="14" :fill="starred.has(item.id) ? 'currentColor' : 'none'" />
-                    </button>
+                    </IconButton>
                   </div>
                 </div>
               </section>
@@ -297,7 +299,10 @@ function onKey(e: KeyboardEvent) {
             </template>
             <span v-else class="keys"><kbd>↵</kbd> {{ t("cmd.keyEdit") }}</span>
             <span class="spacer" />
-            <button v-if="changed" class="icon-btn restore" type="button" @click="restore"><RotateCcw :size="13" /> {{ t("cmd.restore") }}</button>
+            <NButton v-if="changed" quaternary type="tertiary" size="tiny" @click="restore">
+              <template #icon><RotateCcw :size="13" /></template>
+              {{ t("cmd.restore") }}
+            </NButton>
           </footer>
         </div>
       </Transition>
@@ -354,27 +359,6 @@ function onKey(e: KeyboardEvent) {
   margin-right: 8px;
 }
 
-.new {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 5px;
-  height: 36px;
-  padding: 0 13px 0 10px;
-  border: 0;
-  border-radius: 10px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.12s;
-}
-
-.new:hover {
-  background: var(--accent-soft-hover);
-}
-
 /* ---- 搜索框 ---- */
 .search {
   display: flex;
@@ -419,23 +403,6 @@ function onKey(e: KeyboardEvent) {
 .search input::placeholder {
   color: var(--text-dim);
   opacity: 0.8;
-}
-
-.clear {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: var(--fill);
-  color: var(--text-dim);
-  cursor: pointer;
-}
-
-.clear:hover {
-  color: var(--text);
 }
 
 /* ---- 分组和命令列表 ---- */
@@ -544,42 +511,6 @@ h4::after {
   width: 118px;
 }
 
-.act {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: 7px;
-  background: none;
-  color: var(--text-dim);
-  cursor: pointer;
-}
-
-.act:hover {
-  background: var(--bg-raised);
-  color: var(--text);
-}
-
-.act.run {
-  color: var(--accent);
-}
-
-.act.run:hover {
-  background: var(--accent);
-  color: #fff;
-}
-
-.act.danger:hover {
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-.act.star.on {
-  color: var(--pin);
-}
-
 /* ---- 没有命令可显示 ---- */
 .none {
   display: flex;
@@ -606,12 +537,10 @@ h4::after {
   font-weight: 600;
 }
 
-.none .new {
+.none-new {
   max-width: 100%;
   margin-top: 12px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* ---- 底栏 ---- */
@@ -638,8 +567,4 @@ footer {
   flex: 1;
 }
 
-.restore {
-  padding: 0 8px;
-  font-size: 12px;
-}
 </style>

@@ -124,25 +124,28 @@ async function apply() {
           <span v-for="what in WHAT" :key="what" class="dim head">{{ t(what) }}</span>
           <template v-for="(who, w) in WHO" :key="who">
             <span class="who">{{ t(who) }}</span>
-            <button
+            <NButton
               v-for="(what, a) in WHAT"
               :key="what"
-              type="button"
               class="bit"
-              :class="{ on: !!(mode & bit(w, a)) }"
+              size="small"
+              secondary
+              :type="mode & bit(w, a) ? 'primary' : 'default'"
               :aria-pressed="!!(mode & bit(w, a))"
               :title="`${t(who)} · ${t(what)}`"
               @click="setMode(mode ^ bit(w, a))"
-            >{{ "rwx"[a] }}</button>
+            >
+              {{ "rwx"[a] }}
+            </NButton>
           </template>
         </div>
         <div class="octal">
           <NInput :value="octal" size="small" class="octal-input" :status="octalValid ? undefined : 'error'" @update:value="onOctal" />
           <code class="symbolic">{{ formatMode(mode, single?.kind ?? "file") }}</code>
           <span class="dim presets-label">{{ t("props.presets") }}</span>
-          <button v-for="preset in PRESETS" :key="preset" type="button" class="preset" :class="{ on: mode === preset }" @click="setMode(preset)">
+          <NButton v-for="preset in PRESETS" :key="preset" class="preset" size="tiny" secondary :type="mode === preset ? 'primary' : 'default'" @click="setMode(preset)">
             {{ preset.toString(8) }}
-          </button>
+          </NButton>
         </div>
       </section>
 
@@ -215,27 +218,10 @@ h4 {
   padding-right: 12px;
 }
 
-.bit {
-  height: 28px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: none;
-  color: var(--text-dim);
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
-}
-
-.bit:hover {
-  color: var(--text);
-}
-
-.bit.on {
-  border-color: var(--accent-border);
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 600;
+/* 权限位和常用权限是字母和数字：等宽。 */
+.bit,
+.preset {
+  font-family: var(--font-mono);
 }
 
 .octal {
@@ -252,7 +238,7 @@ h4 {
 
 .octal-input :deep(input),
 .symbolic {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
 }
 
 .symbolic {
@@ -263,27 +249,6 @@ h4 {
 .presets-label {
   margin-left: auto;
   font-size: 12px;
-}
-
-.preset {
-  height: 22px;
-  padding: 0 7px;
-  border: 0;
-  border-radius: 6px;
-  background: var(--fill);
-  color: var(--text-dim);
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 11.5px;
-  cursor: pointer;
-}
-
-.preset:hover {
-  color: var(--text);
-}
-
-.preset.on {
-  background: var(--accent-soft);
-  color: var(--accent);
 }
 
 .owner {

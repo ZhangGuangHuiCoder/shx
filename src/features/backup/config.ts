@@ -51,6 +51,7 @@ function parseProfile(v: unknown): Profile | null {
   if (typeof port !== "number" || !Number.isInteger(port) || port < 1 || port > 65535) return null;
   if (typeof username !== "string" || !username) return null;
   if (auth !== "password" && auth !== "key" && auth !== "agent") return null;
+  const dirs = Array.isArray(v.favoriteDirs) ? v.favoriteDirs.filter((dir): dir is string => typeof dir === "string" && dir.startsWith("/")) : [];
   return {
     id,
     host,
@@ -64,6 +65,7 @@ function parseProfile(v: unknown): Profile | null {
     note: text(v.note),
     pinned: v.pinned === true,
     ...(v.keepAlive === true ? { keepAlive: true } : {}),
+    ...(dirs.length ? { favoriteDirs: [...new Set(dirs)] } : {}),
     ...(typeof v.icon === "string" && v.icon ? { icon: v.icon } : {}),
     ...(typeof v.color === "number" && Number.isFinite(v.color) && v.color >= 0 && v.color < 360
       ? { color: Math.round(v.color) }

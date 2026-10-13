@@ -1,21 +1,22 @@
 <script setup lang="ts">
 import {
   ArrowLeft, ArrowRight, ArrowUp, ChevronRight, ChevronsDownUp, ChevronsUpDown, ClipboardCopy, ClipboardPaste, Copy, Download, Eye, EyeOff,
-  FileArchive, FilePlus, Files, FolderArchive, FolderOpen, FolderPlus, FolderSearch, FolderUp, House, LocateFixed,
-  PackageOpen, PanelLeft, Pencil, RefreshCw, Scissors, Search, SlidersHorizontal, SquarePen, SquareTerminal, Trash2, Upload, X,
+  FileArchive, FilePlus, Files, Folder, FolderArchive, FolderOpen, FolderPlus, FolderSearch, FolderUp, House, LocateFixed,
+  PackageOpen, PanelLeft, Pencil, RefreshCw, Scissors, Search, SlidersHorizontal, SquarePen, SquareTerminal, Star, StarOff, Trash2, Upload, X,
 } from "@lucide/vue";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { NInput, NSpin } from "naive-ui";
+import { NButton, NInput, NSpin } from "naive-ui";
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { api, errorMessage, type Conflict, type FileEntry, type Transfer } from "../../shared/api";
 import FileIcon from "../../shared/components/FileIcon.vue";
+import IconButton from "../../shared/components/IconButton.vue";
 import { openContextMenu, shortcut, type MenuEntry } from "../../shared/contextMenu";
 import { t, type MessageKey } from "../../shared/i18n";
 import { choose, confirm, message, prompt } from "../../shared/ui";
-import { baseName, formatMode, formatSize, formatTime, isArchive, joinPath, parentPath, ruleMatcher, shellQuote } from "../../shared/util";
+import { baseName, formatMode, formatOctal, formatSize, formatTime, isArchive, joinPath, parentPath, ruleMatcher, shellQuote } from "../../shared/util";
 import { FILE_TREE_WIDTH, useApp } from "../../stores/app";
 import ArchiveDialog from "./ArchiveDialog.vue";
 import { compareNames, type DirNode } from "./dirTree";
@@ -23,7 +24,7 @@ import DirTree from "./DirTree.vue";
 import EditorModal from "./EditorModal.vue";
 import PropsDialog from "./PropsDialog.vue";
 
-const props = defineProps<{ sessionId: string; active: boolean }>();
+const props = defineProps<{ sessionId: string; /** 会话所连的主机：收藏的目录按主机保存。 */ profileId: string; active: boolean }>();
 const emit = defineEmits<{ send: [data: string] }>();
 const app = useApp();
 
@@ -208,6 +209,49 @@ async function submitPath() {
   if (target && target !== path.value) await navigate(target);
 }
 
+// ---- 收藏 ------------------------------------------------------------------
+
+/** 这台主机上收藏的目录，按收藏的先后排列。 */
+const favorites = computed(() => app.profiles.find((p) => p.id === props.profileId)?.favoriteDirs ?? []);
+const isFavorite = (dir: string) => favorites.value.includes(dir);
+
+function toggleFavorite(dir: string) {
+  // 第一份列表还没回来时，还不知道当前目录是哪个。
+  if (!dir) return;
+  const was = isFavorite(dir);
+  app.toggleFavoriteDir(props.profileId, dir);
+  // 主机在标签页开着时被删掉了的话，收藏无处可存。
+  if (isFavorite(dir) !== was) message.success(t(was ? "fm.unfavorited" : "fm.favorited"));
+}
+
+/** 右键菜单里收藏或取消收藏 `dir` 的那一项；`current` 表示它是正在显示的目录。 */
+function favoriteEntry(dir: string, current = false): MenuEntry {
+  const on = isFavorite(dir);
+  return {
+    label: t(`fm.${on ? "unfavorite" : "favorite"}${current ? "Current" : ""}`),
+    icon: on ? StarOff : Star,
+    hint: current ? shortcut.mod("D") : undefined,
+    action: () => toggleFavorite(dir),
+  };
+}
+
+/** 工具栏上的收藏夹：列出收藏的目录，点一下就过去。 */
+function openFavorites(e: MouseEvent) {
+  const dirs = favorites.value;
+  openContextMenu(e, [
+    { group: t(dirs.length ? "fm.favorites" : "fm.noFavorites") },
+    ...dirs.map((dir): MenuEntry => ({
+      label: baseName(dir) || "/",
+      hint: dir === "/" ? undefined : parentPath(dir),
+      icon: dir === path.value ? FolderOpen : Folder,
+      action: () => navigate(dir),
+      aside: { icon: X, title: t("fm.unfavorite"), action: () => toggleFavorite(dir) },
+    })),
+    "divider",
+    favoriteEntry(path.value, true),
+  ]);
+}
+
 // ---- 目录树 ----------------------------------------------------------------
 
 const tree = ref<InstanceType<typeof DirTree>>();
@@ -254,6 +298,7 @@ function openTreeMenu(e: MouseEvent, node: DirNode) {
     "divider",
     { label: t("fm.copyPath"), icon: ClipboardCopy, action: () => copyText(dir) },
     { label: t("fm.cd"), icon: SquareTerminal, action: () => cdTerminal(dir) },
+    favoriteEntry(dir),
   ]);
 }
 
@@ -263,7 +308,20 @@ const selected = ref(new Set<string>());
 let anchor = -1;
 const scroller = ref<HTMLElement>();
 const scrollTop = ref(0);
+/** 面板窄到放不下所有列时，列表横向滚动了多少；表头跟着平移同样的距离。 */
+const scrollLeft = ref(0);
 const viewHeight = ref(300);
+
+function onScroll() {
+  scrollTop.value = scroller.value!.scrollTop;
+  scrollLeft.value = scroller.value!.scrollLeft;
+}
+
+/**
+ * 列表顶部的 ".." 一行（回上级目录）占的高度；根目录和搜索结果里没有这一行。
+ * 它不是列表里的条目：不能选中，不计入项数，其余各行只是整体下移一行。
+ */
+const lead = computed(() => (path.value && path.value !== "/" && found.value === null ? ROW_HEIGHT : 0));
 
 const selection = computed(() => rows.value.filter((e) => selected.value.has(e.path)));
 const windowStart = computed(() => Math.max(0, Math.floor(scrollTop.value / ROW_HEIGHT) - 6));
@@ -281,10 +339,11 @@ function selectOnly(index: number) {
   if (!entry) return;
   selected.value = new Set([entry.path]);
   anchor = index;
-  const top = index * ROW_HEIGHT;
+  const top = lead.value + index * ROW_HEIGHT;
   const el = scroller.value;
   if (!el) return;
-  if (top < el.scrollTop) el.scrollTop = top;
+  // 回到第一项时一直滚到顶，把 ".." 也露出来。
+  if (top < el.scrollTop) el.scrollTop = index ? top : 0;
   else if (top + ROW_HEIGHT > el.scrollTop + el.clientHeight) el.scrollTop = top + ROW_HEIGHT - el.clientHeight;
 }
 
@@ -620,6 +679,7 @@ function openMenu(e: MouseEvent, index: number | null) {
         },
         { label: t("fm.copyPath"), icon: ClipboardCopy, action: () => copyText(paths.join("\n")) },
         one?.isDir && { label: t("fm.cd"), icon: SquareTerminal, action: () => cdTerminal(one.path) },
+        one?.isDir && favoriteEntry(one.path),
         { label: t("fm.properties"), icon: SlidersHorizontal, action: () => showProperties(items) },
         "divider",
         { label: t("common.delete"), icon: Trash2, danger: true, hint: shortcut.delete, action: () => remove(items) },
@@ -635,6 +695,7 @@ function openMenu(e: MouseEvent, index: number | null) {
         { label: t("common.refresh"), icon: RefreshCw, hint: shortcut.mod("R"), action: refresh },
         { label: t("fm.copyCurrentPath"), icon: ClipboardCopy, action: () => copyText(path.value) },
         { label: t("fm.cd"), icon: SquareTerminal, action: () => cdTerminal(path.value) },
+        favoriteEntry(path.value, true),
       ];
   openContextMenu(e, entries);
 }
@@ -655,6 +716,7 @@ function onKey(e: KeyboardEvent) {
     [mod && key === "c" && items.length > 0, () => (clipboard.value = { cut: false, paths: items.map((i) => i.path) })],
     [mod && key === "x" && items.length > 0, () => (clipboard.value = { cut: true, paths: items.map((i) => i.path) })],
     [mod && key === "v", () => paste()],
+    [mod && key === "d", () => toggleFavorite(path.value)],
     [e.key === "Escape", clearSelection],
   ];
   const hit = handlers.find(([when]) => when);
@@ -711,13 +773,16 @@ defineExpose({ terminalCwd, shellRestarted });
 </script>
 
 <template>
-  <div class="fm">
+  <div class="fm" :class="{ side: app.settings.fileLayout === 'right' }">
     <div class="toolbar">
-      <button class="icon-btn" :title="t('fm.back')" :disabled="!back.length" @click="goBack"><ArrowLeft :size="15" /></button>
-      <button class="icon-btn" :title="t('fm.forward')" :disabled="!forward.length" @click="goForward"><ArrowRight :size="15" /></button>
-      <button class="icon-btn" :title="t('fm.up')" :disabled="path === '/'" @click="navigate(parentPath(path))"><ArrowUp :size="15" /></button>
-      <button class="icon-btn" :title="t('fm.home')" @click="navigate('.')"><House :size="15" /></button>
-      <button class="icon-btn" :title="t('common.refresh')" @click="refresh"><RefreshCw :size="14" /></button>
+      <IconButton :title="t('fm.back')" :disabled="!back.length" @click="goBack"><ArrowLeft :size="15" /></IconButton>
+      <IconButton :title="t('fm.forward')" :disabled="!forward.length" @click="goForward"><ArrowRight :size="15" /></IconButton>
+      <IconButton :title="t('fm.up')" :disabled="path === '/'" @click="navigate(parentPath(path))"><ArrowUp :size="15" /></IconButton>
+      <IconButton :title="t('fm.home')" @click="navigate('.')"><House :size="15" /></IconButton>
+      <IconButton :title="t('common.refresh')" @click="refresh"><RefreshCw :size="14" /></IconButton>
+      <IconButton :type="isFavorite(path) ? 'primary' : 'default'" :title="t('fm.favorites')" @click="openFavorites">
+        <Star :size="15" :fill="isFavorite(path) ? 'currentColor' : 'none'" />
+      </IconButton>
 
       <div class="address" @click.self="editPath">
         <NInput
@@ -740,17 +805,17 @@ defineExpose({ terminalCwd, shellRestarted });
       </div>
 
       <NInput v-model:value="filter" size="tiny" :placeholder="t('fm.filter')" clearable class="filter" />
-      <button class="icon-btn" :title="t('fm.upload')" @click="pickUpload(false)"><Upload :size="15" /></button>
-      <button class="icon-btn" :title="t('fm.downloadSelected')" :disabled="!selection.length" @click="download(selection)"><Download :size="15" /></button>
-      <button class="icon-btn" :title="t('fm.newFile')" @click="create('file')"><FilePlus :size="15" /></button>
-      <button class="icon-btn" :title="t('fm.newFolder')" @click="create('dir')"><FolderPlus :size="15" /></button>
-      <button class="icon-btn" :title="t('fm.deleteSelected')" :disabled="!selection.length" @click="remove(selection)"><Trash2 :size="15" /></button>
-      <button class="icon-btn" :title="t('fm.search')" @click="search"><Search :size="15" /></button>
-      <button class="icon-btn" :class="{ on: app.settings.showHidden }" :title="t('menu.showHidden')" @click="app.settings.showHidden = !app.settings.showHidden">
+      <IconButton :title="t('fm.upload')" @click="pickUpload(false)"><Upload :size="15" /></IconButton>
+      <IconButton :title="t('fm.downloadSelected')" :disabled="!selection.length" @click="download(selection)"><Download :size="15" /></IconButton>
+      <IconButton :title="t('fm.newFile')" @click="create('file')"><FilePlus :size="15" /></IconButton>
+      <IconButton :title="t('fm.newFolder')" @click="create('dir')"><FolderPlus :size="15" /></IconButton>
+      <IconButton :title="t('fm.deleteSelected')" :disabled="!selection.length" @click="remove(selection)"><Trash2 :size="15" /></IconButton>
+      <IconButton :title="t('fm.search')" @click="search"><Search :size="15" /></IconButton>
+      <IconButton :type="app.settings.showHidden ? 'primary' : 'default'" :title="t('menu.showHidden')" @click="app.settings.showHidden = !app.settings.showHidden">
         <component :is="app.settings.showHidden ? Eye : EyeOff" :size="15" />
-      </button>
-      <button class="icon-btn" :class="{ on: follow }" :title="t('fm.follow')" @click="toggleFollow"><LocateFixed :size="15" /></button>
-      <button class="icon-btn" :class="{ on: app.fileTree.show }" :title="t('fm.tree')" @click="app.fileTree.show = !app.fileTree.show"><PanelLeft :size="15" /></button>
+      </IconButton>
+      <IconButton :type="follow ? 'primary' : 'default'" :title="t('fm.follow')" @click="toggleFollow"><LocateFixed :size="15" /></IconButton>
+      <IconButton :type="app.fileTree.show ? 'primary' : 'default'" :title="t('fm.tree')" @click="app.fileTree.show = !app.fileTree.show"><PanelLeft :size="15" /></IconButton>
     </div>
 
     <div ref="body" class="body">
@@ -771,21 +836,32 @@ defineExpose({ terminalCwd, shellRestarted });
       <div class="table" :class="{ dropping }">
         <div v-if="found" class="banner">
           <span>{{ t("fm.searchResults", { query: foundFor, count: found.length }) }}{{ found.length >= 500 ? t("fm.searchLimited") : "" }}</span>
-          <button class="icon-btn" @click="found = null"><X :size="13" /> {{ t("fm.exitSearch") }}</button>
+          <NButton quaternary type="tertiary" size="tiny" @click="found = null">
+            <template #icon><X :size="13" /></template>
+            {{ t("fm.exitSearch") }}
+          </NButton>
         </div>
-        <div class="grid header">
-          <div v-for="c in COLUMNS" :key="c.key" class="cell" @click="sortBy(c.key)">
-            {{ t(c.label) }}<span v-if="sortKey === c.key" class="dim"> {{ sortAsc ? "▲" : "▼" }}</span>
+        <div class="head">
+          <div class="grid header" :style="{ transform: `translateX(${-scrollLeft}px)` }">
+            <div v-for="c in COLUMNS" :key="c.key" class="cell" @click="sortBy(c.key)">
+              {{ t(c.label) }}<span v-if="sortKey === c.key" class="dim"> {{ sortAsc ? "▲" : "▼" }}</span>
+            </div>
           </div>
         </div>
-        <div ref="scroller" class="rows" tabindex="0" @scroll="scrollTop = scroller!.scrollTop" @keydown="onKey" @contextmenu="openMenu($event, null)" @click.self="clearSelection">
-          <div class="spacer" :style="{ height: `${rows.length * ROW_HEIGHT}px` }" @click.self="clearSelection">
+        <div ref="scroller" class="rows" tabindex="0" @scroll="onScroll" @keydown="onKey" @contextmenu="openMenu($event, null)" @click.self="clearSelection">
+          <div class="spacer" :style="{ height: `${lead + rows.length * ROW_HEIGHT}px` }" @click.self="clearSelection">
+            <div v-if="lead" class="grid row parent" :title="t('fm.up')" @click="clearSelection" @dblclick="navigate(parentPath(path))">
+              <div class="cell name">
+                <FileIcon name=".." is-dir kind="dir" :size="15" />
+                <span>..</span>
+              </div>
+            </div>
             <div
               v-for="(e, i) in visible"
               :key="e.path"
               class="grid row"
               :class="{ selected: selected.has(e.path), cut: clipboard?.cut && clipboard.paths.includes(e.path) }"
-              :style="{ top: `${(windowStart + i) * ROW_HEIGHT}px` }"
+              :style="{ top: `${lead + (windowStart + i) * ROW_HEIGHT}px` }"
               @click="clickRow($event, windowStart + i)"
               @dblclick="open(e)"
               @contextmenu.stop="openMenu($event, windowStart + i)"
@@ -802,14 +878,14 @@ defineExpose({ terminalCwd, shellRestarted });
                 <span v-if="e.linkTarget" class="ellipsis dim">→ {{ e.linkTarget }}</span>
               </div>
               <div class="cell num">
-                <template v-if="!e.isDir">{{ formatSize(e.size) }}</template>
-                <template v-else-if="typeof dirSizes.get(e.path) === 'number'">{{ formatSize(dirSizes.get(e.path) as number) }}</template>
+                <span v-if="!e.isDir" class="mono">{{ formatSize(e.size) }}</span>
+                <span v-else-if="typeof dirSizes.get(e.path) === 'number'" class="mono">{{ formatSize(dirSizes.get(e.path) as number) }}</span>
                 <NSpin v-else-if="dirSizes.has(e.path)" :size="12" />
-                <button v-else class="measure" type="button" @click.stop="measure(e)" @dblclick.stop>{{ t("props.calculate") }}</button>
+                <NButton v-else text size="tiny" @click.stop="measure(e)" @dblclick.stop>{{ t("props.calculate") }}</NButton>
               </div>
-              <div class="cell">{{ formatTime(e.mtime) }}</div>
-              <div class="cell mono">{{ formatMode(e.mode, e.kind) }}</div>
-              <div class="cell ellipsis">{{ ownerText(e) }}</div>
+              <div class="cell mono">{{ formatTime(e.mtime) }}</div>
+              <div class="cell mono" :title="formatMode(e.mode, e.kind)">{{ formatOctal(e.mode) }}</div>
+              <div class="cell mono ellipsis" :title="ownerText(e)">{{ ownerText(e) }}</div>
             </div>
           </div>
           <div v-if="!rows.length && !loading" class="none dim">{{ t(found ? "fm.noFound" : filter ? "fm.noMatch" : "fm.emptyFolder") }}</div>
@@ -836,8 +912,6 @@ defineExpose({ terminalCwd, shellRestarted });
   display: flex;
   flex-direction: column;
   background: var(--bg);
-  /* 让末尾的规则能根据面板自身的宽度调整布局。 */
-  container-type: inline-size;
 }
 
 .toolbar {
@@ -898,8 +972,8 @@ defineExpose({ terminalCwd, shellRestarted });
 .tree {
   position: relative;
   flex-shrink: 0;
-  /* 无论拖到多宽，面板较窄时文件列表始终占大头。 */
-  max-width: 45%;
+  /* 无论拖到多宽，都给文件列表留够显示全部列的宽度（session/layout.ts 的 FILE_LIST_MIN_WIDTH）。 */
+  max-width: calc(100% - 610px);
   border-right: 1px solid var(--border);
 }
 
@@ -940,8 +1014,16 @@ defineExpose({ terminalCwd, shellRestarted });
 
 .grid {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) 84px 132px 96px 130px;
+  /* 后四列按内容定宽：大小一列放得下英文的“Calculate”，时间是 16 个字符，权限四位数字，所有者到 `www-data:www-data`。 */
+  grid-template-columns: minmax(178px, 1fr) 82px 136px 64px 140px;
   align-items: center;
+}
+
+/* 所有列始终都在。窗口的最小宽度保证了列表放得下它们（见 session/layout.ts）；
+   万一还是比各列最小宽度之和（上面几个数相加）窄，列表横向滚动。 */
+.grid,
+.spacer {
+  min-width: 600px;
 }
 
 .cell {
@@ -950,10 +1032,15 @@ defineExpose({ terminalCwd, shellRestarted });
   white-space: nowrap;
 }
 
+/* 表头不在滚动区域里，横向跟着列表平移（见 `scrollLeft`）。 */
+.head {
+  flex-shrink: 0;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+}
+
 .header {
   height: 24px;
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--border);
   color: var(--text-dim);
   font-size: 12px;
 }
@@ -970,7 +1057,7 @@ defineExpose({ terminalCwd, shellRestarted });
   position: relative;
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow: auto;
   outline: none;
 }
 
@@ -998,6 +1085,10 @@ defineExpose({ terminalCwd, shellRestarted });
   opacity: 0.45;
 }
 
+.row.parent {
+  top: 0;
+}
+
 .name {
   display: flex;
   align-items: center;
@@ -1016,30 +1107,9 @@ defineExpose({ terminalCwd, shellRestarted });
   text-align: right;
 }
 
-/* 文件夹的大小要请求后才知道：这需要遍历整个目录树。 */
-.measure {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--text-dim);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  opacity: 0.55;
-}
-
-.row:hover .measure,
-.row.selected .measure {
-  opacity: 1;
-}
-
-.measure:hover {
-  color: var(--accent);
-  text-decoration: underline;
-}
-
+/* 名称之外的几列用等宽字体：每一行一样长，上下对得齐。 */
 .mono {
-  font-family: Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
 }
 
@@ -1075,43 +1145,26 @@ defineExpose({ terminalCwd, shellRestarted });
   border-top: 1px solid var(--border);
 }
 
-/* 位于终端旁边时面板较窄：让工具栏换行，地址栏独占一行，
-   只保留放得下的列。 */
-@container (max-width: 720px) {
-  .toolbar {
-    flex-wrap: wrap;
-    /* 按钮仍需第二行时，那一行同样两端对齐。 */
-    justify-content: space-between;
-    height: auto;
-    padding: 4px 6px;
-  }
-
-  /* 地址栏独占一行后，筛选框占满剩余空间，
-     导航按钮靠左，操作按钮靠右。 */
-  .filter {
-    flex: 1 1 120px;
-    width: auto;
-    min-width: 90px;
-  }
-
-  .address {
-    order: 1;
-    flex-basis: 100%;
-    margin: 4px 0 0;
-  }
-
-  .grid {
-    grid-template-columns: minmax(120px, 1fr) 84px 132px;
-  }
-
-  .grid > .cell:nth-child(n + 4) {
-    display: none;
-  }
+/* 位于终端右侧时：工具栏换行，地址栏独占一行、排在按钮下面。 */
+.side .toolbar {
+  flex-wrap: wrap;
+  /* 按钮仍需第二行时，那一行同样两端对齐。 */
+  justify-content: space-between;
+  height: auto;
+  padding: 4px 6px;
 }
 
-@container (max-width: 460px) {
-  .tree {
-    display: none;
-  }
+/* 地址栏独占一行后，筛选框占满剩余空间，
+   导航按钮靠左，操作按钮靠右。 */
+.side .filter {
+  flex: 1 1 120px;
+  width: auto;
+  min-width: 90px;
+}
+
+.side .address {
+  order: 1;
+  flex-basis: 100%;
+  margin: 4px 0 0;
 }
 </style>

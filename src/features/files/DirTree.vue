@@ -5,6 +5,7 @@ import { ChevronRight, ChevronsDownUp, LoaderCircle, Locate } from "@lucide/vue"
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { errorMessage, type FileEntry } from "../../shared/api";
 import FileIcon from "../../shared/components/FileIcon.vue";
+import IconButton from "../../shared/components/IconButton.vue";
 import { t } from "../../shared/i18n";
 import { applyListing, ensurePath, expandable, findNode, pathChain, rootNode, visibleRows, type DirNode } from "./dirTree";
 
@@ -229,8 +230,8 @@ defineExpose({ sync, reload, retry, isExpanded: (path: string) => expanded.value
   <div class="dir-tree">
     <div class="head">
       <span class="ellipsis title">{{ t("fm.tree") }}</span>
-      <button class="icon-btn" :title="t('fm.treeLocate')" @click="reveal(current)"><Locate :size="13" /></button>
-      <button class="icon-btn" :title="t('fm.treeCollapse')" @click="collapseAll"><ChevronsDownUp :size="13" /></button>
+      <IconButton size="tiny" :title="t('fm.treeLocate')" @click="reveal(current)"><Locate :size="13" /></IconButton>
+      <IconButton size="tiny" :title="t('fm.treeCollapse')" @click="collapseAll"><ChevronsDownUp :size="13" /></IconButton>
     </div>
     <div ref="scroller" class="rows" tabindex="0" @scroll="scrollTop = scroller!.scrollTop" @keydown="onKey">
       <div class="spacer" :style="{ height: `${rows.length * ROW_HEIGHT}px` }">
@@ -278,12 +279,6 @@ defineExpose({ sync, reload, retry, isExpanded: (path: string) => expanded.value
 
 .title {
   flex: 1;
-}
-
-.head .icon-btn {
-  height: 20px;
-  min-width: 20px;
-  padding: 0;
 }
 
 .rows {

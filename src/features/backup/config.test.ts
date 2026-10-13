@@ -83,6 +83,20 @@ test("keep-alive comes back from a backup, and only as a real true", () => {
   assert.deepEqual(back.map((p) => p.keepAlive), [true, undefined, undefined]);
 });
 
+test("favorite folders come back from a backup, without duplicates or anything that is not a path", () => {
+  const data: ConfigData = {
+    profiles: [
+      profile("some", { favoriteDirs: ["/var/log", "/etc/nginx"] }),
+      profile("none"),
+      { ...profile("odd"), favoriteDirs: ["/srv", 7, "relative", "/srv", ""] as unknown as string[] },
+      { ...profile("junk"), favoriteDirs: "/srv" as unknown as string[] },
+    ],
+    secrets: {}, keys: [], knownHosts: {}, settings: {}, commands: [],
+  };
+  const back = parseImport(JSON.stringify(buildExport(data))).data.profiles;
+  assert.deepEqual(back.map((p) => p.favoriteDirs), [["/var/log", "/etc/nginx"], undefined, ["/srv"], undefined]);
+});
+
 test("importing keeps local entries and lets the backup win on the same id", () => {
   const merged = applyImport(local, incoming);
   assert.deepEqual(merged.profiles.map((p) => [p.id, p.name]), [["a", "a"], ["b", "b-renamed"], ["c", "c"]]);

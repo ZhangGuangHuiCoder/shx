@@ -3,6 +3,7 @@ import { createPinia } from "pinia";
 import { createApp } from "vue";
 import "./styles.css";
 import { revealWindow } from "./app/window";
+import { fontReady } from "./shared/fonts";
 import { applyTheme, themeSetting } from "./shared/theme";
 import { installTitlebar } from "./shared/titlebar";
 import { hardenWebview } from "./shared/webview";
@@ -22,6 +23,8 @@ async function showWhenPainted() {
   // 窗口自己的底色换成当前主题的背景色：窗口露面到第一帧画出来之间，露出来的是它。
   const background = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
   await win.setBackgroundColor(background).catch(() => {});
+  // 内置字体通常这时已经加载好了；没好就稍等一下，免得窗口露面后文字再换一次字体。
+  await fontReady(200);
   // 等这一帧画完。隐藏的窗口未必还在出帧，所以不能只等它。
   await new Promise<void>((done) => {
     requestAnimationFrame(() => requestAnimationFrame(() => done()));

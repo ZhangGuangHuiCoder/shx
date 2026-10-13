@@ -16,7 +16,7 @@ Shx 是一个桌面 SSH 客户端：终端和 SFTP 文件管理器并排在同�
 
 - **终端**：xterm.js，支持查找；可选保活，shell 运行在服务器的 tmux 里，断线后程序继续运行。
   一台主机可以开多个会话。
-- **文件**：跟随终端 `cd` 的 SFTP 文件管理器，带目录树、权限修改、压缩解压和内置的 Monaco 编辑器。
+- **文件**：跟随终端 `cd` 的 SFTP 文件管理器，带目录树、目录收藏、权限修改、压缩解压和内置的 Monaco 编辑器。
 - **传输**：上传下载队列，可暂停、续传、重试；目录可以先在服务器上打包，再作为一个压缩包下载。
 - **命令助手**：内置近 300 条常用命令，分 15 类，可搜索、收藏，也可以添加自己的命令。
 - **主机**：分组、置顶、图标和颜色；支持密码、私钥和 ssh-agent 登录。
@@ -68,3 +68,6 @@ Tauri 2 · Rust · russh · russh-sftp · tokio · Vue 3 · Pinia · Naive UI ·
 ## 协议
 
 [Apache-2.0](LICENSE)
+
+内置的等宽字体 [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) 以
+[SIL Open Font License 1.1](public/licenses/JetBrainsMono-OFL.txt) 授权。

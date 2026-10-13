@@ -11,6 +11,8 @@ export type MenuEntry =
       /** 对应的键盘快捷键，显示在右侧。 */
       hint?: string;
       action: () => unknown;
+      /** 这一行右端的小按钮：针对同一个对象的另一个操作。 */
+      aside?: { icon: Component; title: string; action: () => unknown };
     }
   /** 不是命令：在顶部说明菜单针对的对象。 */
   | { heading: string; detail?: string; icon?: () => VNode }

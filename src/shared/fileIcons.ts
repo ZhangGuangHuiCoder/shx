@@ -25,49 +25,37 @@ export interface FileIconInfo {
   color: string;
 }
 
-// 配色按深色界面调校；文件夹沿用文件列表原有的金色。
+// 图标按大类上色，一共四种颜色，其余的用次要文字的颜色；都是 styles.css 里随主题变化的变量。
+// 同一大类里的不同类型靠图标的形状区分。
 const COLOR = {
-  folder: "#e2b45c",
-  link: "#6fa8dc",
-  code: "#5aa9e6",
-  markup: "#e08a4f",
-  style: "#6fa8dc",
-  data: "#d4b85c",
-  config: "#94a3b8",
-  text: "#9aa6b2",
-  pdf: "#e0655a",
-  image: "#d182c6",
-  audio: "#e07fa8",
-  video: "#b07fe0",
-  archive: "#e0994f",
-  sheet: "#6fbf6f",
-  font: "#cfa35c",
-  key: "#b08cc0",
-  shell: "#6fc26b",
-  other: "#8a97a5",
+  folder: "var(--accent)",
+  code: "var(--icon-code)",
+  media: "var(--icon-media)",
+  archive: "var(--icon-archive)",
+  plain: "var(--text-dim)",
 } as const;
 
 const FOLDER: FileIconInfo = { component: Folder, color: COLOR.folder };
 const LINK_DIR: FileIconInfo = { component: FolderSymlink, color: COLOR.folder };
-const LINK_FILE: FileIconInfo = { component: FileSymlink, color: COLOR.link };
+const LINK_FILE: FileIconInfo = { component: FileSymlink, color: COLOR.plain };
 const ARCHIVE: FileIconInfo = { component: FileArchive, color: COLOR.archive };
 
 /** 不按扩展名分类的固定文件名。 */
 const SPECIAL: Record<string, FileIconInfo> = {
-  dockerfile: { component: FileCode, color: COLOR.markup },
-  containerfile: { component: FileCode, color: COLOR.markup },
-  makefile: { component: FileTerminal, color: COLOR.shell },
-  gnumakefile: { component: FileTerminal, color: COLOR.shell },
+  dockerfile: { component: FileCode, color: COLOR.code },
+  containerfile: { component: FileCode, color: COLOR.code },
+  makefile: { component: FileTerminal, color: COLOR.code },
+  gnumakefile: { component: FileTerminal, color: COLOR.code },
   "cmakelists.txt": { component: FileCode, color: COLOR.code },
   rakefile: { component: FileCode, color: COLOR.code },
   gemfile: { component: FileCode, color: COLOR.code },
-  ".gitignore": { component: FileCog, color: COLOR.config },
-  ".gitattributes": { component: FileCog, color: COLOR.config },
-  ".gitmodules": { component: FileCog, color: COLOR.config },
-  ".editorconfig": { component: FileCog, color: COLOR.config },
-  ".npmignore": { component: FileCog, color: COLOR.config },
-  license: { component: FileText, color: COLOR.text },
-  licence: { component: FileText, color: COLOR.text },
+  ".gitignore": { component: FileCog, color: COLOR.plain },
+  ".gitattributes": { component: FileCog, color: COLOR.plain },
+  ".gitmodules": { component: FileCog, color: COLOR.plain },
+  ".editorconfig": { component: FileCog, color: COLOR.plain },
+  ".npmignore": { component: FileCog, color: COLOR.plain },
+  license: { component: FileText, color: COLOR.plain },
+  licence: { component: FileText, color: COLOR.plain },
 };
 
 /** 扩展名（不带点，小写）→ 图标。按定义顺序，先匹配到的生效。 */
@@ -83,40 +71,38 @@ group({ component: FileCode, color: COLOR.code }, [
   "swift", "m", "mm", "scala", "lua", "pl", "pm", "r", "jl",
   "dart", "ex", "exs", "clj", "cljs", "hs", "erl", "lisp", "lsp",
   "asm", "s", "f", "f90", "sql", "graphql", "gql", "prisma", "proto",
+  "html", "htm", "xhtml", "css", "scss", "sass", "less", "styl",
 ]);
-group({ component: FileCode, color: COLOR.markup }, ["html", "htm", "xhtml"]);
-group({ component: FileCode, color: COLOR.style }, ["css", "scss", "sass", "less", "styl"]);
-group({ component: FileJson, color: COLOR.data }, ["json", "jsonc", "json5", "yaml", "yml", "toml"]);
-group({ component: FileCog, color: COLOR.config }, [
+group({ component: FileJson, color: COLOR.plain }, ["json", "jsonc", "json5", "yaml", "yml", "toml"]);
+group({ component: FileCog, color: COLOR.plain }, [
   "ini", "conf", "cfg", "config", "properties", "env", "plist", "rc",
 ]);
-group({ component: FileText, color: COLOR.text }, [
-  "txt", "md", "markdown", "rst", "log", "nfo", "tex", "adoc", "doc", "docx", "odt", "rtf",
+group({ component: FileText, color: COLOR.plain }, [
+  "txt", "md", "markdown", "rst", "log", "nfo", "tex", "adoc", "doc", "docx", "odt", "rtf", "pdf",
 ]);
-group({ component: FileText, color: COLOR.pdf }, ["pdf"]);
-group({ component: FileImage, color: COLOR.image }, [
+group({ component: FileImage, color: COLOR.media }, [
   "png", "jpg", "jpeg", "gif", "bmp", "ico", "icns", "webp", "svg",
   "avif", "tiff", "tif", "heic", "heif", "raw", "psd", "ai", "sketch",
 ]);
-group({ component: FileAudio, color: COLOR.audio }, [
+group({ component: FileAudio, color: COLOR.media }, [
   "mp3", "wav", "flac", "aac", "ogg", "oga", "m4a", "wma", "opus", "aiff", "aif", "mid", "midi",
 ]);
-group({ component: FileVideo, color: COLOR.video }, [
+group({ component: FileVideo, color: COLOR.media }, [
   "mp4", "m4v", "mkv", "mov", "avi", "webm", "flv", "wmv", "mpg", "mpeg", "3gp",
 ]);
 group({ component: FileArchive, color: COLOR.archive }, [
   "7z", "rar", "zst", "lzma", "jar", "war", "deb", "rpm", "apk", "pkg", "dmg", "iso",
 ]);
-group({ component: FileSpreadsheet, color: COLOR.sheet }, ["csv", "tsv", "xls", "xlsx", "ods", "numbers"]);
-group({ component: FileType, color: COLOR.font }, ["ttf", "otf", "woff", "woff2", "eot", "fon"]);
-group({ component: FileKey, color: COLOR.key }, [
+group({ component: FileSpreadsheet, color: COLOR.plain }, ["csv", "tsv", "xls", "xlsx", "ods", "numbers"]);
+group({ component: FileType, color: COLOR.media }, ["ttf", "otf", "woff", "woff2", "eot", "fon"]);
+group({ component: FileKey, color: COLOR.plain }, [
   "key", "pem", "crt", "cer", "der", "pub", "p12", "pfx", "gpg", "asc", "keystore", "jks", "sig",
 ]);
-group({ component: FileTerminal, color: COLOR.shell }, [
+group({ component: FileTerminal, color: COLOR.code }, [
   "sh", "bash", "zsh", "fish", "ps1", "bat", "cmd", "command",
 ]);
 
-const DEFAULT_ICON: FileIconInfo = { component: File, color: COLOR.other };
+const DEFAULT_ICON: FileIconInfo = { component: File, color: COLOR.plain };
 
 /**
  * 文件和文件夹图标的唯一来源。判定顺序：
@@ -127,7 +113,7 @@ export function fileIcon(target: FileIconTarget, opts: FileIconOptions = {}): Fi
 
   if (kind === "link") return isDir ? LINK_DIR : LINK_FILE;
   if (isDir || kind === "dir") return FOLDER;
-  if (kind === "other") return { component: FileCog, color: COLOR.other };
+  if (kind === "other") return { component: FileCog, color: COLOR.plain };
 
   const lower = name.toLowerCase();
   if (SPECIAL[lower]) return SPECIAL[lower];
@@ -139,5 +125,5 @@ export function fileIcon(target: FileIconTarget, opts: FileIconOptions = {}): Fi
     if (hit) return hit;
   }
 
-  return opts.text ? { component: FileText, color: COLOR.text } : DEFAULT_ICON;
+  return opts.text ? { component: FileText, color: COLOR.plain } : DEFAULT_ICON;
 }

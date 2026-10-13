@@ -57,6 +57,11 @@ const THEMES: [Settings["theme"], MessageKey][] = [
   ["auto", "theme.auto"],
 ];
 
+const FONTS: [Settings["font"], MessageKey][] = [
+  ["builtin", "font.builtin"],
+  ["system", "font.system"],
+];
+
 const SEPARATOR: MenuNode = { type: "separator" };
 const native = (item: PredefinedMenuItemOptions["item"], label?: string): MenuNode => ({ type: "native", item, label });
 
@@ -143,6 +148,7 @@ export function appMenu(): TopMenu[] {
       { type: "item", label: t("menu.editorFontUp"), action: resize("editorFontSize", 1) },
       { type: "item", label: t("menu.editorFontDown"), action: resize("editorFontSize", -1) },
       { type: "item", label: t("menu.editorFontReset"), action: reset("editorFontSize") },
+      { type: "submenu", label: t("menu.font"), items: choices("font", FONTS.map(([value, label]) => [value, t(label)])) },
       SEPARATOR,
       {
         // 布局：会话里要不要文件管理器、它放在哪一侧，以及窗口底部要不要状态栏。

@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, FolderOpen, Pause, Play, RotateCw, X } from "@lucid
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { computed } from "vue";
 import { api, errorMessage, type Transfer } from "../../shared/api";
+import IconButton from "../../shared/components/IconButton.vue";
 import { t } from "../../shared/i18n";
 import { message } from "../../shared/ui";
 import { formatDuration, formatSize } from "../../shared/util";
@@ -57,11 +58,11 @@ function reveal(path: string) {
         <div class="ellipsis dim sub" :title="detail(item)">{{ detail(item) }}<template v-if="item.current && item.filesTotal > 1"> · {{ item.current }}</template></div>
       </div>
       <div class="actions">
-        <button v-if="item.local && item.state === 'done'" class="icon-btn" :title="t('transfer.reveal')" @click="reveal(item.local)"><FolderOpen :size="13" /></button>
-        <button v-if="item.state === 'running'" class="icon-btn" :title="t('transfer.pause')" @click="act(api.transferControl(item.id, 'pause'))"><Pause :size="13" /></button>
-        <button v-if="item.state === 'paused'" class="icon-btn" :title="t('transfer.resume')" @click="act(api.transferControl(item.id, 'resume'))"><Play :size="13" /></button>
-        <button v-if="item.state === 'failed' || item.state === 'cancelled'" class="icon-btn" :title="t('transfer.retry')" @click="act(api.transferRetry(item.id))"><RotateCw :size="13" /></button>
-        <button v-if="isActive(item)" class="icon-btn" :title="t('common.cancel')" @click="act(api.transferControl(item.id, 'cancel'))"><X :size="13" /></button>
+        <IconButton v-if="item.local && item.state === 'done'" size="tiny" :title="t('transfer.reveal')" @click="reveal(item.local)"><FolderOpen :size="13" /></IconButton>
+        <IconButton v-if="item.state === 'running'" size="tiny" :title="t('transfer.pause')" @click="act(api.transferControl(item.id, 'pause'))"><Pause :size="13" /></IconButton>
+        <IconButton v-if="item.state === 'paused'" size="tiny" :title="t('transfer.resume')" @click="act(api.transferControl(item.id, 'resume'))"><Play :size="13" /></IconButton>
+        <IconButton v-if="item.state === 'failed' || item.state === 'cancelled'" size="tiny" :title="t('transfer.retry')" @click="act(api.transferRetry(item.id))"><RotateCw :size="13" /></IconButton>
+        <IconButton v-if="isActive(item)" size="tiny" :title="t('common.cancel')" @click="act(api.transferControl(item.id, 'cancel'))"><X :size="13" /></IconButton>
       </div>
     </div>
     <div v-if="!ordered.length" class="none dim">{{ t("transfer.empty") }}</div>

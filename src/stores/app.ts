@@ -3,10 +3,12 @@ import { HeartPulse } from "@lucide/vue";
 import { defineStore } from "pinia";
 import { reactive, ref, watch, type Ref } from "vue";
 import { applyImport, pickSettings, type ConfigData } from "../features/backup/config";
-import { parseCustomCommand, removeCommand, restoreDefaults, type CustomCommand } from "../features/commands/commands";
+import { parseCustomCommand, removeCommand, restoreDefaults, toggleFavorite, type CustomCommand } from "../features/commands/commands";
 import { planSession, slotOf } from "../features/session/keepAlive";
+import { FILE_TREE_DEFAULT_WIDTH } from "../features/session/layout";
 import { chooseSession } from "../features/session/sessionChooser";
 import { api, errorMessage, type AppError, type ConnectAuth, type Profile, type StoredKey, type Transfer } from "../shared/api";
+import { applyFont, isFontSetting } from "../shared/fonts";
 import { isLocale, locale, systemLocale, t } from "../shared/i18n";
 import { DEFAULT_EDIT_RULES, defaultSettings, readStored, STORAGE, type Settings } from "../shared/settings";
 import { applyTheme, isThemeSetting } from "../shared/theme";
@@ -27,7 +29,7 @@ export interface FileTreePrefs {
   width: number;
 }
 
-export const FILE_TREE_WIDTH = { min: 120, max: 520, initial: 200 };
+export const FILE_TREE_WIDTH = { min: 120, max: 520, initial: FILE_TREE_DEFAULT_WIDTH };
 
 /** 存放置顶会话的伪分组名，排在真实分组之上。 */
 export const PINNED_GROUP = "__pinned__";
@@ -107,6 +109,16 @@ export const useApp = defineStore("app", () => {
       // 存储或备份里的值不认识：退回默认的深色。
       if (!isThemeSetting(theme)) return void (settings.theme = "dark");
       applyTheme(theme);
+    },
+    { immediate: true },
+  );
+
+  watch(
+    () => settings.font,
+    (font) => {
+      // 存储或备份里的值不认识：退回默认的内置字体。
+      if (!isFontSetting(font)) return void (settings.font = "builtin");
+      void applyFont(font);
     },
     { immediate: true },
   );
@@ -216,6 +228,12 @@ export const useApp = defineStore("app", () => {
   function toggleKeepAlive(id: string) {
     const p = profiles.value.find((x) => x.id === id);
     if (p) p.keepAlive = !p.keepAlive;
+  }
+
+  /** 收藏主机上的一个目录，已收藏的则取消；新收藏的排在最后。 */
+  function toggleFavoriteDir(id: string, dir: string) {
+    const p = profiles.value.find((x) => x.id === id);
+    if (p) p.favoriteDirs = toggleFavorite(p.favoriteDirs ?? [], dir);
   }
 
   function toggleGroupCollapsed(name: string) {
@@ -504,7 +522,7 @@ export const useApp = defineStore("app", () => {
 
   return {
     profiles, keys, commands, saveCommand, deleteCommand, restoreCommands, tabs, tabLabel, connecting, activeKey, transfers, settings, sidebar, fileTree,
-    init, saveProfile, deleteProfile, duplicateProfile, togglePinned, toggleKeepAlive, toggleGroupCollapsed, reorderProfiles,
+    init, saveProfile, deleteProfile, duplicateProfile, togglePinned, toggleKeepAlive, toggleFavoriteDir, toggleGroupCollapsed, reorderProfiles,
     importKey, deleteKey, importConfig, openTab, goHome, reconnect, closeTab, clearTransfers, resetEditRules,
   };
 });

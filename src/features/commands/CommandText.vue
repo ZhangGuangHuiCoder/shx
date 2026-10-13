@@ -37,7 +37,7 @@ const parts = computed(() => commandParts(props.command, props.words));
 .command {
   margin-top: 2px;
   color: var(--text-dim);
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 11.5px;
   line-height: 17px;
 }

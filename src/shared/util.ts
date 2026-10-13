@@ -47,6 +47,11 @@ export function formatMode(mode: number | null, kind: string): string {
   return out;
 }
 
+/** 八进制的权限数字，如 `755`；带 setuid/setgid/sticky 位时是四位，如 `4755`。 */
+export function formatOctal(mode: number | null): string {
+  return mode === null ? "" : (mode & 0o7777).toString(8).padStart(3, "0");
+}
+
 export function joinPath(dir: string, name: string): string {
   return dir.endsWith("/") ? dir + name : `${dir}/${name}`;
 }

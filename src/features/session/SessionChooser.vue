@@ -5,6 +5,7 @@ import { HeartPulse, Plus, X } from "@lucide/vue";
 import { NButton } from "naive-ui";
 import { computed, onMounted, ref } from "vue";
 import DialogHeader from "../../shared/components/DialogHeader.vue";
+import IconButton from "../../shared/components/IconButton.vue";
 import { t } from "../../shared/i18n";
 import { formatTime } from "../../shared/util";
 import type { SessionChoice } from "./sessionChooser";
@@ -38,7 +39,7 @@ onMounted(() => setTimeout(() => body.value?.querySelector<HTMLElement>(".join.l
 <template>
   <div ref="body" class="chooser">
     <DialogHeader :icon="HeartPulse" :title="t('keepAlive.chooseTitle')" :detail="t('keepAlive.chooseDetail', { name: host, count: sessions.length })">
-      <button class="icon-btn" type="button" tabindex="-1" :title="t('common.cancel')" @click="emit('done', null)"><X :size="16" /></button>
+      <IconButton :focusable="false" :title="t('common.cancel')" @click="emit('done', null)"><X :size="16" /></IconButton>
     </DialogHeader>
 
     <div class="sessions">
@@ -126,7 +127,7 @@ onMounted(() => setTimeout(() => body.value?.querySelector<HTMLElement>(".join.l
   border-radius: 10px;
   background: var(--fill);
   color: var(--text-dim);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 600;
 }
@@ -161,7 +162,7 @@ onMounted(() => setTimeout(() => body.value?.querySelector<HTMLElement>(".join.l
 }
 
 .busy .command {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
 }
 
 .chip {
@@ -188,7 +189,7 @@ onMounted(() => setTimeout(() => body.value?.querySelector<HTMLElement>(".join.l
 }
 
 .path {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
 }
 
 .time {

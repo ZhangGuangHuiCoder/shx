@@ -8,7 +8,7 @@ export type { DialogItem };
 
 export const { message, dialog } = createDiscreteApi(["message", "dialog"], {
   // 用 computed 让独立的对话框和消息跟随应用主题。
-  configProviderProps: computed(() => ({ theme: naiveTheme.value, themeOverrides })),
+  configProviderProps: computed(() => ({ theme: naiveTheme.value, themeOverrides: themeOverrides.value })),
 });
 
 type DialogProps = InstanceType<typeof AppDialog>["$props"];

@@ -23,6 +23,8 @@ export interface Profile {
   color?: number;
   /** 终端运行在服务器的 tmux 里，连接断开后 shell 仍然存活。 */
   keepAlive?: boolean;
+  /** 文件管理器里收藏的目录（服务器上的绝对路径），按收藏的先后排列。 */
+  favoriteDirs?: string[];
 }
 
 /** 服务器上留着的一个保持会话。 */

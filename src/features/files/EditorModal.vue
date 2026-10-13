@@ -2,7 +2,9 @@
 import { Lock, Save, X } from "@lucide/vue";
 import { NButton, NSpin } from "naive-ui";
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import IconButton from "../../shared/components/IconButton.vue";
 import { api, errorMessage } from "../../shared/api";
+import { loadedMonoFamily } from "../../shared/fonts";
 import { t } from "../../shared/i18n";
 import { isDark } from "../../shared/theme";
 import { confirm, message } from "../../shared/ui";
@@ -81,6 +83,7 @@ onMounted(async () => {
     // 在只读的文件里打字时，Monaco 在光标处给出的说明。
     readOnlyMessage: { value: t("editor.readOnlyHint") },
     fontSize: app.settings.editorFontSize,
+    fontFamily: loadedMonoFamily.value,
     automaticLayout: true,
     minimap: { enabled: text.length > 20_000 },
     scrollBeyondLastLine: false,
@@ -101,6 +104,8 @@ watch(
   (fontSize) => editor.value?.updateOptions({ fontSize }),
 );
 
+watch(loadedMonoFamily, (fontFamily) => editor.value?.updateOptions({ fontFamily }));
+
 watch(isDark, () => monacoApi?.editor.setTheme(monacoTheme()));
 
 onBeforeUnmount(() => {
@@ -120,7 +125,7 @@ onBeforeUnmount(() => {
           <NButton v-else size="tiny" type="primary" :disabled="!dirty" :loading="saving" @click="save">
             <template #icon><Save :size="13" /></template>{{ t("common.save") }}
           </NButton>
-          <button class="icon-btn" :title="t('common.close')" @click="close"><X :size="15" /></button>
+          <IconButton :title="t('common.close')" @click="close"><X :size="15" /></IconButton>
         </div>
         <div class="body">
           <div ref="host" class="host" />

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ArrowDownUp, ChevronDown, ChevronUp } from "@lucide/vue";
+import { NButton } from "naive-ui";
 import { computed, watch } from "vue";
 import { errorMessage } from "../../shared/api";
 import { t } from "../../shared/i18n";
@@ -38,7 +39,7 @@ function clear() {
     <span v-if="active.length" class="accent">{{ t("transfer.active", { count: active.length }) }} · {{ formatSize(speed) }}/s</span>
     <span v-if="finished" class="dim">{{ t("transfer.finished", { count: finished }) }}</span>
     <span v-if="failed" class="bad">{{ t("transfer.failedCount", { count: failed }) }}</span>
-    <button v-if="finished" class="icon-btn clear" @click.stop="clear">{{ t("transfer.clear") }}</button>
+    <NButton v-if="finished" quaternary type="tertiary" size="tiny" @click.stop="clear">{{ t("transfer.clear") }}</NButton>
     <component :is="open ? ChevronDown : ChevronUp" :size="14" />
   </div>
 </template>
@@ -66,8 +67,4 @@ function clear() {
   color: var(--danger);
 }
 
-.clear {
-  height: 20px;
-  font-size: 12px;
-}
 </style>

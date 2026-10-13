@@ -37,9 +37,10 @@ onMounted(() => setTimeout(() => body.value?.querySelector<HTMLElement>(".close"
       <div class="version">shx · {{ t("about.version", { version }) }}</div>
 
       <div class="links">
-        <button v-for="link in LINKS" :key="link.url" class="link" type="button" :title="link.url" @click="openUrl(link.url)">
-          <component :is="link.icon" :size="13" :stroke-width="1.9" />{{ link.label() }}
-        </button>
+        <NButton v-for="link in LINKS" :key="link.url" quaternary type="tertiary" size="tiny" :title="link.url" @click="openUrl(link.url)">
+          <template #icon><component :is="link.icon" :size="13" /></template>
+          {{ link.label() }}
+        </NButton>
       </div>
 
       <footer>
@@ -114,29 +115,6 @@ onMounted(() => setTimeout(() => body.value?.querySelector<HTMLElement>(".close"
   margin-top: 18px;
   padding-top: 14px;
   border-top: 1px solid var(--border);
-}
-
-.link {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 26px;
-  padding: 0 9px;
-  border: 0;
-  border-radius: 7px;
-  background: none;
-  color: var(--text-dim);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  transition:
-    background-color 0.12s,
-    color 0.12s;
-}
-
-.link:hover {
-  background: var(--bg-hover);
-  color: var(--accent);
 }
 
 footer {

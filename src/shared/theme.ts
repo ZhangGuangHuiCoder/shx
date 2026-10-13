@@ -2,6 +2,7 @@
 // （启动时的首次渲染、独立的对话框 API）不依赖 Pinia 也能跟随主题。
 import { darkTheme, type GlobalTheme, type GlobalThemeOverrides } from "naive-ui";
 import { computed, ref } from "vue";
+import { monoFamily, uiFamily } from "./fonts";
 import { readStored, STORAGE, type Settings } from "./settings";
 
 /** 用户选的主题：固定浅色、固定深色，或者跟随系统。 */
@@ -25,13 +26,18 @@ function initialSetting(): ThemeSetting {
 const system = window.matchMedia("(prefers-color-scheme: dark)");
 const systemDark = ref(system.matches);
 
-/** 应用对 Naive UI 的样式调整，应用本身和独立对话框共用。 */
-export const themeOverrides: GlobalThemeOverrides = {
+/**
+ * 应用对 Naive UI 的样式调整，应用本身和独立对话框共用。全局字体也从这里走：
+ * 主题里的字体要靠 <NGlobalStyle>（App.vue）写到 body 上，组件才会跟着变。
+ */
+export const themeOverrides = computed<GlobalThemeOverrides>(() => ({
   common: {
     primaryColor: "#409eff",
     primaryColorHover: "#66b1ff",
     primaryColorPressed: "#3a8ee6",
     primaryColorSuppl: "#409eff",
+    fontFamily: uiFamily.value,
+    fontFamilyMono: monoFamily.value,
     fontSize: "13px",
     borderRadius: "7px",
     borderRadiusSmall: "5px",
@@ -40,7 +46,7 @@ export const themeOverrides: GlobalThemeOverrides = {
   // 和应用其他地方的滚动条一个样子（styles.css）。
   Scrollbar: { color: "var(--scrollbar)", colorHover: "var(--scrollbar-hover)", width: "6px", height: "6px", borderRadius: "3px" },
   Dialog: { borderRadius: "14px", padding: "0" },
-};
+}));
 
 export const themeSetting = ref<ThemeSetting>(initialSetting());
 export const themeMode = computed<ThemeMode>(() => (themeSetting.value === "auto" ? (systemDark.value ? "dark" : "light") : themeSetting.value));

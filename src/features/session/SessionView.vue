@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { t } from "../../shared/i18n";
 import { useApp, type Tab } from "../../stores/app";
 import FileManager from "../files/FileManager.vue";
+import { filePaneMinWidth } from "./layout";
 import TerminalPane from "./TerminalPane.vue";
 
 const props = defineProps<{ tab: Tab; active: boolean }>();
@@ -28,9 +29,11 @@ const root = ref<HTMLElement>();
 const layout = computed(() => (app.settings.fileLayout === "right" ? "right" : "bottom"));
 /** 文件管理器占会话区域的比例，按布局分别记住。 */
 const share = reactive({ bottom: 0.45, right: 0.5 });
+/** 文件管理器在右侧时不窄于它的列表（和目录树）所需的宽度，列表才不用横向滚动；在下方时它占满窗口的宽度。 */
+const paneMinWidth = computed(() => (layout.value === "right" ? filePaneMinWidth(app.fileTree.show) : 0));
 const paneSize = computed(() => {
   const size = `${share[layout.value] * 100}%`;
-  return layout.value === "right" ? { width: size } : { height: size };
+  return layout.value === "right" ? { width: size, minWidth: `${paneMinWidth.value}px` } : { height: size };
 });
 /** 终端报告它最终是否进入了该标签页的保持会话。 */
 function setAttached(attached: boolean) {
@@ -44,7 +47,7 @@ function startDrag(e: MouseEvent) {
   const move = (ev: MouseEvent) => {
     const box = root.value!.getBoundingClientRect();
     const part = layout.value === "right" ? (box.right - ev.clientX) / box.width : (box.bottom - ev.clientY) / box.height;
-    share[layout.value] = Math.min(0.85, Math.max(0.12, part));
+    share[layout.value] = Math.min(0.85, Math.max(0.12, part, paneMinWidth.value / box.width));
   };
   stopDrag = () => {
     window.removeEventListener("mousemove", move);
@@ -67,7 +70,7 @@ onBeforeUnmount(() => stopDrag?.());
       <!-- 隐藏文件管理器时只是不显示，不卸载：它的当前目录和选择留着，再显示时还在。 -->
       <div v-show="app.settings.showFiles" class="splitter" @mousedown="startDrag" />
       <div v-show="app.settings.showFiles" class="file-pane" :style="paneSize">
-        <FileManager ref="files" :session-id="sessionId" :active="active && app.settings.showFiles && tab.status === 'connected'" @send="terminal?.write($event)" />
+        <FileManager ref="files" :session-id="sessionId" :profile-id="tab.profileId" :active="active && app.settings.showFiles && tab.status === 'connected'" @send="terminal?.write($event)" />
       </div>
     </template>
     <div v-if="tab.status !== 'connected'" class="overlay" :class="{ solid: !sessionId }">

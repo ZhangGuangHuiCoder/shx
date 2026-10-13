@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { Plus, X } from "@lucide/vue";
-import { dateEnUS, dateZhCN, enUS, NConfigProvider, NSpin, zhCN } from "naive-ui";
-import { computed, onMounted } from "vue";
+import { dateEnUS, dateZhCN, enUS, NConfigProvider, NGlobalStyle, NSpin, zhCN } from "naive-ui";
+import { computed, onMounted, watchEffect } from "vue";
 import CommandAssistant from "../features/commands/CommandAssistant.vue";
 import HomePage from "../features/home/HomePage.vue";
 import RulesDialog from "../features/rules/RulesDialog.vue";
+import { windowMinWidth } from "../features/session/layout";
 import SessionView from "../features/session/SessionView.vue";
 import { errorMessage } from "../shared/api";
 import ContextMenuHost from "../shared/components/ContextMenuHost.vue";
+import IconButton from "../shared/components/IconButton.vue";
 import { locale, t } from "../shared/i18n";
 import { naiveTheme, themeOverrides } from "../shared/theme";
 import { CUSTOM_TITLEBAR, OVERLAY_TITLEBAR } from "../shared/titlebar";
@@ -17,11 +19,18 @@ import { installCloseGuard } from "./closeGuard";
 import { installMenu } from "./menu";
 import StatusBar from "./StatusBar.vue";
 import TitleBar from "./TitleBar.vue";
+import { setMinWidth } from "./window";
 
 const app = useApp();
 
 // Naive UI 自带的文字（日期选择器、空状态等）跟随应用语言。
 const naive = computed(() => (locale.value === "zh" ? { locale: zhCN, date: dateZhCN } : { locale: enUS, date: dateEnUS }));
+
+// 窗口的最小宽度跟着布局走：窄到文件列表放不下所有列之前，就不让窗口再缩了。
+watchEffect(() => {
+  const view = { showFiles: app.settings.showFiles, fileLayout: app.settings.fileLayout, treeShown: app.fileTree.show };
+  void setMinWidth(windowMinWidth(view, window.screen.availWidth));
+});
 
 onMounted(() => {
   app.init().catch((e) => message.error(errorMessage(e)));
@@ -45,11 +54,11 @@ onMounted(() => {
           @mousedown.middle.prevent="app.closeTab(tab.key)"
         >
           <NSpin v-if="tab.status === 'connecting'" :size="12" />
-          <span v-else class="dot" :class="tab.status" />
+          <span v-else class="status-dot" :class="tab.status" />
           <span class="ellipsis">{{ app.tabLabel(tab) }}</span>
-          <button class="icon-btn close" :title="t('common.close')" @click.stop="app.closeTab(tab.key)"><X :size="13" /></button>
+          <IconButton class="close" size="tiny" :title="t('common.close')" @click.stop="app.closeTab(tab.key)"><X :size="13" /></IconButton>
         </div>
-        <button class="icon-btn new-tab" :class="{ active: app.activeKey === null }" :title="t('home.newTab')" @click="app.goHome()"><Plus :size="15" /></button>
+        <IconButton class="new-tab" :type="app.activeKey === null ? 'primary' : 'default'" :title="t('home.newTab')" @click="app.goHome()"><Plus :size="15" /></IconButton>
       </div>
       <div class="views">
         <SessionView
@@ -65,6 +74,8 @@ onMounted(() => {
       </div>
       <StatusBar v-show="app.settings.showStatusBar" />
     </main>
+    <!-- 把主题里的全局字体写到 body 上；没有它，改主题的字体不起作用。 -->
+    <NGlobalStyle />
     <ContextMenuHost />
     <CommandAssistant />
     <RulesDialog />
@@ -131,9 +142,6 @@ onMounted(() => {
 
 .tab .close {
   margin-left: auto;
-  height: 20px;
-  min-width: 20px;
-  padding: 0;
   visibility: hidden;
 }
 
@@ -142,38 +150,8 @@ onMounted(() => {
   visibility: visible;
 }
 
-.tab.active .close:hover {
-  background: var(--accent-soft-hover);
-}
-
 .new-tab {
   flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  color: var(--text-dim);
-}
-
-.new-tab:hover {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-
-.new-tab.active {
-  background: var(--bg-active);
-  color: var(--accent);
-}
-
-.dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  background: var(--ok);
-}
-
-.dot.closed {
-  background: var(--danger);
 }
 
 .views {

@@ -4,6 +4,7 @@ import { Info, Pencil, Plus, Trash2, X } from "@lucide/vue";
 import { NAutoComplete, NButton, NInput } from "naive-ui";
 import { computed, nextTick, onMounted, reactive, ref } from "vue";
 import DialogHeader from "../../shared/components/DialogHeader.vue";
+import IconButton from "../../shared/components/IconButton.vue";
 import { shortcut } from "../../shared/contextMenu";
 import { t } from "../../shared/i18n";
 import CommandText from "./CommandText.vue";
@@ -42,7 +43,7 @@ defineExpose({ submit });
 <template>
   <div class="editor">
     <DialogHeader :icon="existing ? Pencil : Plus" :title="t(existing ? 'cmd.editTitle' : 'cmd.new')" :detail="existing ? props.command.name : ''" class="head">
-      <button class="icon-btn" type="button" :title="t('common.close')" @click="emit('close')"><X :size="16" /></button>
+      <IconButton :title="t('common.close')" @click="emit('close')"><X :size="16" /></IconButton>
     </DialogHeader>
 
     <div class="fields">
@@ -73,7 +74,10 @@ defineExpose({ submit });
     </div>
 
     <footer>
-      <button v-if="existing" class="icon-btn remove" type="button" @click="emit('remove')"><Trash2 :size="13" /> {{ t("common.delete") }}</button>
+      <NButton v-if="existing" quaternary type="error" size="small" @click="emit('remove')">
+        <template #icon><Trash2 :size="14" /></template>
+        {{ t("common.delete") }}
+      </NButton>
       <span class="spacer" />
       <span class="keys"><kbd>esc</kbd> {{ t("cmd.keyBack") }}</span>
       <span class="keys"><kbd>{{ shortcut.mod("↵") }}</kbd> {{ t("cmd.keySave") }}</span>
@@ -134,7 +138,7 @@ defineExpose({ submit });
 }
 
 .mono :deep(textarea) {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -186,17 +190,6 @@ footer {
   padding: 0 16px 0 14px;
   border-top: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg) 55%, var(--bg-raised));
-}
-
-.remove {
-  height: 28px;
-  padding: 0 9px;
-  border-radius: 7px;
-}
-
-.remove:hover:not(:disabled) {
-  background: var(--danger-soft);
-  color: var(--danger);
 }
 
 .spacer {

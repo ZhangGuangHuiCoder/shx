@@ -10,10 +10,7 @@
   --text: #dce1ea;
   --text-dim: #8b93a1;
   --accent: #409eff;
-  --accent-hover: #66b1ff;
-  --accent-pressed: #3a8ee6;
   --accent-soft: rgb(64 158 255 / 16%);
-  --accent-soft-hover: rgb(64 158 255 / 26%);
   --accent-border: rgb(64 158 255 / 45%);
   --hero-glow: rgb(64 158 255 / 13%);
   --fill: rgb(255 255 255 / 6%);
@@ -22,13 +19,19 @@
   --danger-soft: rgb(229 100 106 / 15%);
   --ok: #58b889;
   --pin: #e2b45c;
+  /* 文件图标按大类上色（shared/fileIcons.ts）：代码、媒体、压缩包；文件夹用主色，其余用次要文字的颜色。 */
+  --icon-code: #5fc08a;
+  --icon-media: #b790e6;
+  --icon-archive: #e58aa6;
   --overlay: rgb(20 22 26 / 82%);
   --shadow: rgb(0 0 0 / 45%);
   --scrollbar: #3a3d45;
   --scrollbar-hover: #4d515c;
   color-scheme: dark;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  font-size: 13px;
+  /* 字体不在这里定：界面的在 Naive UI 的主题里（shared/theme.ts），等宽文字用的 --font-mono
+     由 shared/fonts.ts 写到这个元素上。
+     内置的等宽字体带编程连字（-> 连成箭头之类）；命令和路径要原样显示。 */
+  font-variant-ligatures: no-contextual;
 }
 
 [data-theme="light"] {
@@ -39,11 +42,7 @@
   --border: #dbe3ee;
   --text: #1f2d3d;
   --text-dim: #6b7785;
-  --accent: #409eff;
-  --accent-hover: #66b1ff;
-  --accent-pressed: #3a8ee6;
   --accent-soft: rgb(64 158 255 / 10%);
-  --accent-soft-hover: rgb(64 158 255 / 18%);
   --accent-border: rgb(64 158 255 / 50%);
   --hero-glow: rgb(64 158 255 / 16%);
   --fill: rgb(31 45 61 / 6%);
@@ -52,6 +51,9 @@
   --danger-soft: rgb(217 83 79 / 11%);
   --ok: #3da76f;
   --pin: #cf9a2c;
+  --icon-code: #2f9e62;
+  --icon-media: #8b5fd0;
+  --icon-archive: #cf5a82;
   --overlay: rgb(240 244 250 / 85%);
   --shadow: rgb(31 45 61 / 18%);
   --scrollbar: #c3ccd9;
@@ -80,47 +82,27 @@ body,
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: var(--bg);
-  color: var(--text);
   user-select: none;
   -webkit-user-select: none;
   cursor: default;
+}
+
+html {
+  background: var(--bg);
+}
+
+/* <NGlobalStyle>（App.vue）用来把主题里的字体写到 body 上。它顺带还会写底色、文字颜色和字号，
+   所以这三项要压过它：颜色应用用自己的变量；字号保持界面一直以来实际使用的 14px。 */
+body {
+  background: var(--bg) !important;
+  color: var(--text) !important;
+  font-size: 14px !important;
 }
 
 input,
 textarea {
   user-select: text;
   -webkit-user-select: text;
-}
-
-.icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  height: 26px;
-  min-width: 26px;
-  padding: 0 5px;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--text-dim);
-  font: inherit;
-  cursor: pointer;
-}
-
-.icon-btn:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-
-.icon-btn:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.icon-btn.on {
-  color: var(--accent);
 }
 
 .dim {
@@ -148,6 +130,23 @@ kbd {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 连接状态的小圆点（标签栏、状态栏）：默认是“连接中”的颜色。 */
+.status-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pin);
+}
+
+.status-dot.connected {
+  background: var(--ok);
+}
+
+.status-dot.closed {
+  background: var(--danger);
 }
 
 /* 滚动条：全应用一个样子——没有轨道，6px 宽的圆角滑块，指针移上去颜色加深。
@@ -222,7 +221,7 @@ kbd {
 /* 右键菜单（ContextMenuHost.vue）：Naive 的下拉菜单，改成应用自己的样式。 */
 .n-dropdown-menu.ctx-menu {
   min-width: 212px;
-  max-width: 320px;
+  max-width: 360px;
   padding: 5px;
   border: 1px solid var(--border);
   border-radius: 11px;
@@ -260,10 +259,43 @@ kbd {
   gap: 28px;
 }
 
+/* 菜单放不下时截短的是右侧的提示；名称只在它自己就太长时才截短。 */
+.ctx-label > span:first-child {
+  flex-shrink: 0;
+  max-width: 240px;
+}
+
 .ctx-hint {
+  min-width: 0;
   color: var(--text-dim);
   font-size: 11.5px;
   letter-spacing: 0.5px;
+}
+
+.ctx-tail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ctx-aside {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.ctx-aside:hover {
+  background: var(--bg-active);
+  color: var(--text);
 }
 
 .ctx-menu .ctx-danger .n-dropdown-option-body,
@@ -290,13 +322,6 @@ kbd {
 
 .ctx-heading-text {
   min-width: 0;
-}
-
-.ctx-heading-title,
-.ctx-heading-detail {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .ctx-heading-title {

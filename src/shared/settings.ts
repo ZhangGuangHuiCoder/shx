@@ -22,18 +22,50 @@ export interface Settings {
   favoriteCommands: string[];
   /** 界面配色；`auto` 跟随系统的深浅外观。 */
   theme: "dark" | "light" | "auto";
+  /** 界面、终端和编辑器的字体：应用内置的等宽字体 JetBrains Mono，或系统自带的字体。 */
+  font: "builtin" | "system";
 }
 
 export const FONT_MIN = 9;
 export const FONT_MAX = 28;
 export const FONT_DEFAULT = 13;
 
+/**
+ * 默认在编辑器里打开的文件：服务器上常见的文本文件。规则的写法见 `ruleMatcher`（util.ts）：
+ * 以点开头的按结尾匹配（扩展名、点文件），带通配符的按通配符，其余的是完整文件名；都不区分大小写。
+ * 只收文本：同一个扩展名常常是二进制文件的（`.out`、`.key`、`.bak`）不收。
+ */
 export const DEFAULT_EDIT_RULES = [
-  ".txt", ".md", ".log", ".conf", ".cfg", ".ini", ".env", ".properties", ".toml", ".yaml", ".yml",
-  ".json", ".xml", ".csv", ".sh", ".bash", ".zsh", ".py", ".js", ".ts", ".vue", ".html", ".css",
-  ".go", ".rs", ".java", ".c", ".h", ".cpp", ".php", ".rb", ".lua", ".sql", ".service",
-  "Dockerfile", "Makefile", ".gitignore", ".bashrc", ".zshrc", ".profile", ".vimrc",
-  "hosts", "fstab", "crontab", "authorized_keys", "nginx*",
+  // 文本和文档
+  ".txt", ".md", ".markdown", ".rst", ".adoc", ".tex", ".log", ".err", ".csv", ".tsv", ".diff", ".patch", "nohup.out",
+  "README", "LICENSE", "LICENCE", "COPYING", "NOTICE", "AUTHORS", "CHANGELOG", "CHANGES", "NEWS", "TODO", "VERSION", "INSTALL",
+  // 配置和数据
+  ".conf", ".cfg", ".cnf", ".ini", ".properties", ".toml", ".yaml", ".yml", ".json", ".jsonc", ".json5", ".ipynb",
+  ".xml", ".xsl", ".xsd", ".svg", ".plist", ".config", ".lock", ".env", ".env*", ".example", ".sample", ".template", ".default", ".dist",
+  ".tf", ".tfvars", ".hcl", ".nomad", ".gradle", ".cmake", ".mk", ".ovpn", ".pem", ".crt", ".csr", ".pub",
+  // systemd 和包管理器
+  ".service", ".socket", ".timer", ".target", ".mount", ".path", ".slice", ".network", ".netdev", ".desktop",
+  ".repo", ".list", ".sources", ".rules",
+  // 脚本
+  ".sh", ".bash", ".zsh", ".fish", ".ksh", ".csh", ".ps1", ".bat", ".cmd", ".awk", ".sed",
+  // 源代码
+  ".py", ".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".vue", ".svelte", ".html", ".htm", ".css", ".scss", ".sass", ".less",
+  ".go", ".rs", ".java", ".kt", ".scala", ".groovy", ".c", ".h", ".cc", ".cpp", ".hpp", ".cs", ".swift", ".m", ".dart", ".zig",
+  ".php", ".rb", ".pl", ".pm", ".lua", ".tcl", ".r", ".jl", ".ex", ".exs", ".erl", ".hs", ".clj", ".lisp", ".el", ".vim", ".nix",
+  ".sql", ".graphql", ".proto", ".asm", ".s",
+  // 模板
+  ".tpl", ".tmpl", ".j2", ".jinja", ".jinja2", ".erb", ".ejs", ".hbs", ".mustache", ".twig",
+  // 有固定名字的工程文件
+  "Dockerfile*", "Containerfile", "Makefile*", "GNUmakefile", "Caddyfile", "Vagrantfile", "Jenkinsfile", "Procfile", "Justfile",
+  "Gemfile", "Rakefile", "Brewfile", "Pipfile",
+  // 点文件：.*rc 和 .*ignore 各是一大类（.bashrc、.vimrc、.npmrc……；.gitignore、.dockerignore……）
+  ".*rc", ".*ignore", ".rc", "bashrc", "bash.bashrc", "zshrc", "vimrc", "inputrc", "nanorc", "wgetrc", "screenrc",
+  ".profile", ".bash_profile", ".bash_aliases", ".bash_logout", ".zshenv", ".zprofile",
+  ".gitconfig", ".gitattributes", ".gitmodules", ".editorconfig", ".htaccess", ".htpasswd", ".pgpass", ".flake8",
+  // 系统和服务的配置文件
+  "hosts", "hosts.allow", "hosts.deny", "hostname", "fstab", "crontab", "anacrontab", "passwd", "group", "sudoers", "exports",
+  "environment", "profile", "issue", "motd", "timezone", "shells", "services", "aliases", "modules", "interfaces", "*-release",
+  "authorized_keys", "known_hosts", "sshd_config", "ssh_config", "config", "nginx*",
 ];
 
 export function defaultSettings(): Settings {
@@ -50,6 +82,7 @@ export function defaultSettings(): Settings {
     favoriteCommands: [],
     language: systemLocale(),
     theme: "dark",
+    font: "builtin",
   };
 }
 

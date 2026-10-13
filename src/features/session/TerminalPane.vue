@@ -11,7 +11,9 @@ import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { api, errorMessage } from "../../shared/api";
+import IconButton from "../../shared/components/IconButton.vue";
 import { openContextMenu } from "../../shared/contextMenu";
+import { loadedMonoFamily } from "../../shared/fonts";
 import { t } from "../../shared/i18n";
 import { confirm, message } from "../../shared/ui";
 import { useApp } from "../../stores/app";
@@ -28,7 +30,7 @@ const query = ref("");
 const searchInput = ref<HTMLInputElement>();
 
 const term = new Terminal({
-  fontFamily: 'Menlo, Monaco, "SF Mono", "Cascadia Mono", Consolas, "PingFang SC", monospace',
+  fontFamily: loadedMonoFamily.value,
   fontSize: app.settings.terminalFontSize,
   cursorBlink: true,
   scrollback: 10000,
@@ -284,6 +286,12 @@ watch(
   },
 );
 
+// 换了字体，或者内置字体这时才加载完：字宽可能不一样，列数要重算。
+watch(loadedMonoFamily, (family) => {
+  term.options.fontFamily = family;
+  refit();
+});
+
 watch(terminalTheme, (theme) => (term.options.theme = theme));
 
 onBeforeUnmount(() => {
@@ -308,9 +316,9 @@ defineExpose({ write, focus: () => term.focus() });
         @keydown.esc.prevent="closeSearch"
         @input="find(true)"
       />
-      <button class="icon-btn" :title="t('term.previous')" @click="find(false)"><ChevronUp :size="14" /></button>
-      <button class="icon-btn" :title="t('term.next')" @click="find(true)"><ChevronDown :size="14" /></button>
-      <button class="icon-btn" :title="t('common.close')" @click="closeSearch"><X :size="14" /></button>
+      <IconButton size="tiny" :title="t('term.previous')" @click="find(false)"><ChevronUp :size="14" /></IconButton>
+      <IconButton size="tiny" :title="t('term.next')" @click="find(true)"><ChevronDown :size="14" /></IconButton>
+      <IconButton size="tiny" :title="t('common.close')" @click="closeSearch"><X :size="14" /></IconButton>
     </div>
   </div>
 </template>

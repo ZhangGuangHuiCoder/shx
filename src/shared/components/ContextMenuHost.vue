@@ -17,16 +17,25 @@ const options = computed<DropdownOption[]>(() =>
           h("div", { class: "ctx-heading" }, [
             entry.icon?.(),
             h("div", { class: "ctx-heading-text" }, [
-              h("div", { class: "ctx-heading-title" }, entry.heading),
-              entry.detail ? h("div", { class: "ctx-heading-detail" }, entry.detail) : null,
+              h("div", { class: "ctx-heading-title ellipsis" }, entry.heading),
+              entry.detail ? h("div", { class: "ctx-heading-detail ellipsis" }, entry.detail) : null,
             ]),
           ]),
       };
     }
     if ("group" in entry) return { type: "render", key: `group-${index}`, render: () => h("div", { class: "ctx-group" }, entry.group) };
+    const { aside } = entry;
+    const hint = () => (entry.hint ? h("span", { class: "ctx-hint ellipsis" }, entry.hint) : null);
+    const tail = aside
+      ? () =>
+          h("span", { class: "ctx-tail" }, [
+            hint(),
+            h("button", { class: "ctx-aside", type: "button", title: aside.title, onClick: (e: MouseEvent) => (e.stopPropagation(), run(aside.action)) }, h(aside.icon, { size: 13 })),
+          ])
+      : hint;
     return {
       key: index,
-      label: () => h("span", { class: "ctx-label" }, [h("span", entry.label), entry.hint ? h("span", { class: "ctx-hint" }, entry.hint) : null]),
+      label: () => h("span", { class: "ctx-label" }, [h("span", { class: "ellipsis" }, entry.label), tail()]),
       disabled: entry.disabled,
       icon: () => h(entry.icon, { size: 15, strokeWidth: 1.8 }),
       props: entry.danger ? { class: "ctx-danger" } : undefined,
@@ -38,13 +47,18 @@ function close() {
   contextMenu.show = false;
 }
 
-function select(index: number) {
+/** 关掉菜单，执行点中的操作。 */
+function run(action: () => unknown) {
   close();
-  const entry = contextMenu.entries[index];
-  if (!entry || entry === "divider" || "heading" in entry || "group" in entry) return;
   void Promise.resolve()
-    .then(entry.action)
+    .then(action)
     .catch((e) => message.error(errorMessage(e)));
+}
+
+function select(index: number) {
+  const entry = contextMenu.entries[index];
+  if (!entry || entry === "divider" || "heading" in entry || "group" in entry) return close();
+  run(entry.action);
 }
 
 function onKey(event: KeyboardEvent) {
