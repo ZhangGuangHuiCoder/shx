@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-  ArrowRight, ChevronRight, Copy, Fingerprint, GripVertical, HeartPulse, KeyRound, LockKeyhole, MoreVertical, Moon, Palette, Pencil,
+  ArrowRight, ChevronRight, Copy, Fingerprint, GlobeLock, GripVertical, HeartPulse, KeyRound, LockKeyhole, MoreVertical, Moon, Pencil,
   Pin, PinOff, Plus, Search, SearchX, Sun, SunMoon, TerminalSquare, Trash2,
 } from "@lucide/vue";
 import draggable from "vuedraggable";
@@ -16,6 +16,7 @@ import { THEME_SETTINGS } from "../../shared/theme";
 import { CUSTOM_TITLEBAR, OVERLAY_TITLEBAR } from "../../shared/titlebar";
 import { confirm } from "../../shared/ui";
 import { PINNED_GROUP, useApp } from "../../stores/app";
+import { openTunnelDialog } from "../tunnel/tunnelDialog";
 import { hostHue, resolveHostIcon } from "./hostIcons";
 import IconPicker from "./IconPicker.vue";
 import ProfileDialog from "./ProfileDialog.vue";
@@ -95,8 +96,9 @@ function openCardMenu(event: MouseEvent, p: Profile) {
     "divider",
     { label: t(p.pinned ? "sidebar.unpin" : "sidebar.pin"), icon: p.pinned ? PinOff : Pin, action: () => app.togglePinned(p.id) },
     { label: t(p.keepAlive ? "home.keepAliveOff" : "home.keepAliveOn"), icon: HeartPulse, action: () => app.toggleKeepAlive(p.id) },
+    // 隧道要改系统的路由，不是每个系统上都做得了。
+    ...(app.tunnelSupported ? [{ label: t("tunnel.menu"), icon: GlobeLock, action: () => openTunnelDialog(p.id) }] : []),
     { label: t("common.edit"), icon: Pencil, action: () => edit(p) },
-    { label: t("profile.customize"), icon: Palette, action: () => (picking.value = p) },
     { label: t("sidebar.duplicate"), icon: Copy, action: () => duplicate(p) },
     "divider",
     { label: t("common.delete"), icon: Trash2, danger: true, action: () => remove(p) },
@@ -304,6 +306,9 @@ function onReorder(group: ViewGroup) {
                     </span>
                     <span v-if="element.keepAlive" class="chip keep" :title="t('home.keepAliveTip')">
                       <HeartPulse :size="12" />
+                    </span>
+                    <span v-if="app.tunnel?.profileId === element.id" class="chip tunnel" :title="t('tunnel.chip')">
+                      <GlobeLock :size="12" />
                     </span>
                     <span v-if="sessions.has(element.id)" class="chip live"><i class="pulse" />{{ t("home.sessions", {
                       count: sessions.get(element.id)! }) }}</span>
@@ -770,6 +775,12 @@ function onReorder(group: ViewGroup) {
   padding: 0 5px;
   background: var(--tint-soft);
   color: var(--tint-text);
+}
+
+.chip.tunnel {
+  padding: 0 5px;
+  background: color-mix(in srgb, var(--ok) 15%, transparent);
+  color: var(--ok);
 }
 
 .chip.live {

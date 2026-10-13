@@ -7,6 +7,7 @@ import HomePage from "../features/home/HomePage.vue";
 import RulesDialog from "../features/rules/RulesDialog.vue";
 import { windowMinWidth } from "../features/session/layout";
 import SessionView from "../features/session/SessionView.vue";
+import TunnelDialog from "../features/tunnel/TunnelDialog.vue";
 import { errorMessage } from "../shared/api";
 import ContextMenuHost from "../shared/components/ContextMenuHost.vue";
 import IconButton from "../shared/components/IconButton.vue";
@@ -19,6 +20,7 @@ import { installCloseGuard } from "./closeGuard";
 import { installMenu } from "./menu";
 import StatusBar from "./StatusBar.vue";
 import TitleBar from "./TitleBar.vue";
+import { checkForUpdatesOnLaunch } from "./update";
 import { setMinWidth } from "./window";
 
 const app = useApp();
@@ -36,6 +38,7 @@ onMounted(() => {
   app.init().catch((e) => message.error(errorMessage(e)));
   installCloseGuard().catch((e) => message.error(errorMessage(e)));
   installMenu().catch((e) => message.error(t("app.menuFailed", { error: errorMessage(e) })));
+  checkForUpdatesOnLaunch();
 });
 </script>
 
@@ -79,6 +82,7 @@ onMounted(() => {
     <ContextMenuHost />
     <CommandAssistant />
     <RulesDialog />
+    <TunnelDialog />
   </NConfigProvider>
 </template>
 

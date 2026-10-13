@@ -97,6 +97,21 @@ test("favorite folders come back from a backup, without duplicates or anything t
   assert.deepEqual(back.map((p) => p.favoriteDirs), [["/var/log", "/etc/nginx"], undefined, ["/srv"], undefined]);
 });
 
+test("tunnel settings come back from a backup, and what is not a network is left out", () => {
+  const tunnel = { route: "include" as const, cidrs: ["10.0.0.0/8"], bypass: [] };
+  const data: ConfigData = {
+    profiles: [
+      profile("set", { tunnel }),
+      profile("none"),
+      { ...profile("odd"), tunnel: { ...tunnel, cidrs: ["10.0.0.0/8", "office", 7, "fd00::/8"], dns: true, ipv6: true } as unknown as Profile["tunnel"] },
+      { ...profile("junk"), tunnel: "all" as unknown as Profile["tunnel"] },
+    ],
+    secrets: {}, keys: [], knownHosts: {}, settings: {}, commands: [],
+  };
+  const back = parseImport(JSON.stringify(buildExport(data))).data.profiles;
+  assert.deepEqual(back.map((p) => p.tunnel), [tunnel, undefined, tunnel, undefined]);
+});
+
 test("importing keeps local entries and lets the backup win on the same id", () => {
   const merged = applyImport(local, incoming);
   assert.deepEqual(merged.profiles.map((p) => [p.id, p.name]), [["a", "a"], ["b", "b-renamed"], ["c", "c"]]);

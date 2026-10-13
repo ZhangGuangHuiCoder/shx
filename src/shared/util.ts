@@ -1,7 +1,7 @@
 import { t } from "./i18n";
 
 export function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
   const units = ["KB", "MB", "GB", "TB"];
   let value = bytes / 1024;
   let unit = 0;

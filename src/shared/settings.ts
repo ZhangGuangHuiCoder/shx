@@ -96,6 +96,8 @@ export const STORAGE = {
   sidebar: "shx.sidebar",
   fileTree: "shx.fileTree",
   commands: "shx.commands",
+  /** 用户选了“跳过此版本”的那个版本号。只管这台电脑，不进备份。 */
+  skippedUpdate: "shx.skippedUpdate",
 } as const;
 
 /** 读取保存的值；不存在或无法解析时返回默认值。 */

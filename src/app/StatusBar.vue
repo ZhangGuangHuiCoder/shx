@@ -1,17 +1,22 @@
 <script setup lang="ts">
 import { Check, FolderTree, HeartPulse, Moon, SquareTerminal, Sun, SunMoon } from "@lucide/vue";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { computed, ref, type Component } from "vue";
 import { openAssistant } from "../features/commands/commandAssistant";
 import { slotOf } from "../features/session/keepAlive";
 import TransferPanel from "../features/transfer/TransferPanel.vue";
 import TransferStatus from "../features/transfer/TransferStatus.vue";
+import TunnelStatus from "../features/tunnel/TunnelStatus.vue";
 import IconButton from "../shared/components/IconButton.vue";
+import { errorMessage } from "../shared/api";
 import { contextMenu, openContextMenu, type MenuEntry } from "../shared/contextMenu";
 import { t } from "../shared/i18n";
 import { THEME_SETTINGS } from "../shared/theme";
+import { message } from "../shared/ui";
 import { useApp } from "../stores/app";
 
-// 窗口底部的状态栏：左边是当前标签页的连接状态，右边是快捷操作和传输。
+// 窗口底部的状态栏：左边是当前标签页的连接状态，右边是整个应用的事——隧道、快捷操作、传输，
+// 三组之间用细线隔开。
 const app = useApp();
 const transfersOpen = ref(false);
 
@@ -26,6 +31,13 @@ const address = computed(() => {
 /** 当前标签页进的是这台主机的第几个保活会话。 */
 const slot = computed(() => (tab.value ? slotOf(tab.value.profileId, tab.value.keepAlive) : null));
 const sessionCount = computed(() => app.tabs.filter((item) => item.status === "connected").length);
+
+function copyAddress() {
+  writeText(address.value).then(
+    () => message.success(t("fm.copied")),
+    (e) => message.error(errorMessage(e)),
+  );
+}
 
 // ---- 快捷操作 --------------------------------------------------------------
 
@@ -112,7 +124,9 @@ function chooseActions(event: MouseEvent) {
     <div class="bar" @contextmenu="chooseActions">
       <template v-if="tab">
         <span class="item"><i class="status-dot" :class="tab.status" />{{ t(`status.${tab.status}`) }}</span>
-        <span v-if="address" class="item dim address"><span class="ellipsis">{{ address }}</span></span>
+        <button v-if="address" type="button" class="item dim address" :title="t('status.copyAddress')" @click="copyAddress">
+          <span class="ellipsis">{{ address }}</span>
+        </button>
         <!-- 开了保活的主机：终端是否真的进了 tmux 会话，连上之后才知道。 -->
         <span
           v-if="tab.keepAlive && tab.status === 'connected'"
@@ -128,6 +142,9 @@ function chooseActions(event: MouseEvent) {
         <span v-if="sessionCount" class="item"><i class="status-dot connected" />{{ sessionCount }} {{ t("home.stat.sessions") }}</span>
       </template>
       <span class="spacer" />
+      <!-- 隧道是整台机器的事，不属于哪个标签页：在哪一页都显示。 -->
+      <TunnelStatus />
+      <i v-if="app.tunnel" class="divider" />
       <div v-if="shownActions.length" class="actions">
         <IconButton
           v-for="action in shownActions"
@@ -141,6 +158,7 @@ function chooseActions(event: MouseEvent) {
           <component :is="action.icon" :size="14" />
         </IconButton>
       </div>
+      <i v-if="shownActions.length" class="divider" />
       <TransferStatus v-model:open="transfersOpen" />
     </div>
   </div>
@@ -168,10 +186,44 @@ function chooseActions(event: MouseEvent) {
   padding: 0 10px;
 }
 
+/* 地址点一下就复制：是个按钮，但长得和旁边的文字一样，指针移上去才看得出来。 */
 .item.address {
   flex-shrink: 1;
   min-width: 0;
-  padding-left: 0;
+  height: 100%;
+  margin-left: -4px;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.item.address:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.item.address:focus-visible {
+  outline: 2px solid var(--accent-border);
+  outline-offset: -2px;
+}
+
+/* 还在连接：圆点一明一暗，和连上了、断开了的静止圆点区分开。 */
+.item .status-dot.connecting {
+  animation: connecting 1.2s ease-in-out infinite;
+}
+
+@keyframes connecting {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item .status-dot.connecting {
+    animation: none;
+  }
 }
 
 .item.on {
@@ -188,5 +240,13 @@ function chooseActions(event: MouseEvent) {
   align-items: center;
   gap: 2px;
   padding: 0 6px;
+}
+
+/* 右边几组之间的细线，比状态栏矮一截。 */
+.divider {
+  flex-shrink: 0;
+  width: 1px;
+  height: 12px;
+  background: var(--border);
 }
 </style>

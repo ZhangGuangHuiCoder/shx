@@ -6,9 +6,16 @@ mod menu;
 mod sftp;
 mod ssh;
 mod transfer;
+mod tunnel;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 以 TUN 模式的助手身份启动时（见 tunnel/helper.rs）只干助手的活，不启动应用。
+    #[cfg(any(target_os = "macos", windows))]
+    if let Some(code) = tunnel::helper::dispatch() {
+        std::process::exit(code);
+    }
+
     // 必须在创建应用（及其菜单）之前执行。
     menu::disable_system_items();
 
@@ -79,6 +86,13 @@ pub fn run() {
             transfer::default_download_dir,
             config::config_export,
             config::config_import,
+            tunnel::tunnel_supported,
+            tunnel::tunnel_helper,
+            tunnel::tunnel_helper_set,
+            tunnel::tunnel_start,
+            tunnel::tunnel_attach,
+            tunnel::tunnel_stop,
+            tunnel::tunnel_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

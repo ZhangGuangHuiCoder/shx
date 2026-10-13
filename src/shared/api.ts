@@ -25,6 +25,35 @@ export interface Profile {
   keepAlive?: boolean;
   /** 文件管理器里收藏的目录（服务器上的绝对路径），按收藏的先后排列。 */
   favoriteDirs?: string[];
+  /** 把这台主机当作隧道出口时的设置；没有设置过时用默认值。 */
+  tunnel?: TunnelConfig;
+}
+
+/** 隧道（TUN 模式）的设置：本机的哪些流量经这台主机出去。隧道只管 IPv4。 */
+export interface TunnelConfig {
+  /** `all`：全部流量进隧道；`include`：只有 `cidrs` 里的网段进隧道。 */
+  route: "all" | "include";
+  /** 分流时进隧道的网段。 */
+  cidrs: string[];
+  /** 不进隧道的网段。 */
+  bypass: string[];
+}
+
+/** 后端报告的隧道状态。 */
+export interface TunnelStatus {
+  /** `reconnecting`：承载隧道的 SSH 连接断了，流量仍被引进隧道，只是哪儿也去不了。 */
+  state: "running" | "reconnecting" | "stopped";
+  /** 虚拟网卡的名字。 */
+  device: string;
+  /** SSH 服务器的地址；重连时必须连回同一个地址，只有它绕开了隧道。 */
+  server: string;
+  warning: string | null;
+  /** 隧道意外中断的原因。 */
+  error: string | null;
+  connections: number;
+  /** 应用发出去和收到的字节数。 */
+  up: number;
+  down: number;
 }
 
 /** 服务器上留着的一个保持会话。 */
@@ -209,4 +238,18 @@ export const api = {
   /** 写出导出文件，仅文件所有者可读。 */
   configExport: (path: string, content: string) => invoke<void>("config_export", { path, content }),
   configImport: (path: string) => invoke<string>("config_import", { path }),
+
+  /** 这个系统上能不能用隧道。 */
+  tunnelSupported: () => invoke<boolean>("tunnel_supported"),
+  /** 隧道助手是否已装进系统（装了之后开隧道不用再输密码）；没有这回事的系统上是 null。 */
+  tunnelHelper: () => invoke<boolean | null>("tunnel_helper"),
+  /** 把隧道助手装进系统（请用户授权一次，不同意时以 `cancelled` 失败），或者从系统里删掉。 */
+  tunnelHelperSet: (installed: boolean) => invoke<void>("tunnel_helper_set", { installed }),
+  /** 开启隧道，流量经会话 `sessionId` 的连接出去。会请用户授予管理员权限，不同意时以 `cancelled` 失败。 */
+  tunnelStart: (sessionId: string, config: TunnelConfig) => invoke<TunnelStatus>("tunnel_start", { sessionId, config }),
+  /** 承载隧道的连接断开后，把隧道接到重连出来的新会话上。 */
+  tunnelAttach: (sessionId: string) => invoke<TunnelStatus>("tunnel_attach", { sessionId }),
+  /** 关闭隧道；返回时虚拟网卡和路由已经撤掉。 */
+  tunnelStop: () => invoke<void>("tunnel_stop"),
+  tunnelStatus: () => invoke<TunnelStatus | null>("tunnel_status"),
 };

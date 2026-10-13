@@ -2,6 +2,7 @@
 // 都是纯函数，不依赖框架，可以直接用 `node --test` 做单元测试。
 import type { Profile, StoredKey } from "../../shared/api.ts";
 import { parseCustomCommand, type CustomCommand } from "../commands/commands.ts";
+import { parseTunnelConfig } from "../tunnel/tunnel.ts";
 
 export interface ConfigData {
   profiles: Profile[];
@@ -52,6 +53,7 @@ function parseProfile(v: unknown): Profile | null {
   if (typeof username !== "string" || !username) return null;
   if (auth !== "password" && auth !== "key" && auth !== "agent") return null;
   const dirs = Array.isArray(v.favoriteDirs) ? v.favoriteDirs.filter((dir): dir is string => typeof dir === "string" && dir.startsWith("/")) : [];
+  const tunnel = parseTunnelConfig(v.tunnel);
   return {
     id,
     host,
@@ -66,6 +68,7 @@ function parseProfile(v: unknown): Profile | null {
     pinned: v.pinned === true,
     ...(v.keepAlive === true ? { keepAlive: true } : {}),
     ...(dirs.length ? { favoriteDirs: [...new Set(dirs)] } : {}),
+    ...(tunnel ? { tunnel } : {}),
     ...(typeof v.icon === "string" && v.icon ? { icon: v.icon } : {}),
     ...(typeof v.color === "number" && Number.isFinite(v.color) && v.color >= 0 && v.color < 360
       ? { color: Math.round(v.color) }

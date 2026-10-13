@@ -686,7 +686,7 @@ async fn run(session: &Session, task: &Task, permits: &Semaphore) -> Result<()> 
             };
             copied.map_err(|e| match e {
                 AppError::Cancelled => e,
-                e => AppError::msg(format!("{}: {e}", base_name(&item.remote))),
+                e => AppError::msg(format!("{}{}{e}", base_name(&item.remote), tr("：", ": "))),
             })?;
             task.files_done.fetch_add(1, Ordering::Relaxed);
             Ok(())

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -102,7 +103,7 @@ pub async fn connect(
     username: &str,
     auth: Auth,
     known: KnownHostKeys,
-) -> Result<client::Handle<ClientHandler>> {
+) -> Result<Session> {
     let config = Arc::new(client::Config {
         keepalive_interval: Some(Duration::from_secs(30)),
         keepalive_max: 3,
@@ -115,14 +116,20 @@ pub async fn connect(
         issue: issue.clone(),
     };
 
-    let connecting = client::connect(config, (host, port), handler);
-    let mut handle = match tokio::time::timeout(CONNECT_TIMEOUT, connecting).await {
+    // 自己建 TCP 连接，才知道实际连上的是哪个地址（主机名可能解析出好几个）。
+    let connecting = async {
+        let socket = tokio::net::TcpStream::connect((host, port)).await?;
+        let _ = socket.set_nodelay(true);
+        let peer = socket.peer_addr()?;
+        Ok::<_, AppError>((client::connect_stream(config, socket, handler).await?, peer))
+    };
+    let (mut handle, peer) = match tokio::time::timeout(CONNECT_TIMEOUT, connecting).await {
         Err(_) => return Err(AppError::msg(tr("连接超时", "Connection timed out"))),
         Ok(Err(e)) => {
             // 主机密钥被拒绝时，表现为一个笼统的密钥交换失败。
             return Err(issue.lock().take().map(Into::into).unwrap_or(e));
         }
-        Ok(Ok(handle)) => handle,
+        Ok(Ok(connected)) => connected,
     };
 
     let ok = match auth {
@@ -144,11 +151,11 @@ pub async fn connect(
                 Err(keys::Error::KeyIsEncrypted) => return Err(AppError::PassphraseRequired),
                 Err(e) if passphrase.is_some() => {
                     return Err(AppError::msg(format!(
-                        "{}: {e}",
-                        tr("私钥口令错误或格式不支持", "Wrong passphrase or unsupported key format")
+                        "{}{e}",
+                        tr("私钥口令错误或格式不支持：", "Wrong passphrase or unsupported key format: ")
                     )))
                 }
-                Err(e) => return Err(AppError::msg(format!("{}: {e}", tr("无法解析私钥", "Cannot parse the private key")))),
+                Err(e) => return Err(AppError::msg(format!("{}{e}", tr("无法解析私钥：", "Could not parse the private key: ")))),
             };
             let hash = handle.best_supported_rsa_hash().await?.flatten();
             handle
@@ -165,7 +172,7 @@ pub async fn connect(
             .await;
         return Err(AppError::AuthFailed);
     }
-    Ok(handle)
+    Ok(Session::new(handle, peer))
 }
 
 /// 有些服务器只提供 keyboard-interactive 认证：所有提示都用密码作答。
@@ -215,10 +222,10 @@ async fn connect_agent() -> std::result::Result<Agent, keys::Error> {
 async fn agent_auth(handle: &mut client::Handle<ClientHandler>, username: &str) -> Result<bool> {
     let mut agent = connect_agent()
         .await
-        .map_err(|e| AppError::msg(format!("{}: {e}", tr("无法连接 ssh-agent", "Cannot connect to ssh-agent"))))?;
+        .map_err(|e| AppError::msg(format!("{}{e}", tr("无法连接 ssh-agent：", "Could not connect to ssh-agent: "))))?;
     let identities = agent.request_identities().await?;
     if identities.is_empty() {
-        return Err(AppError::msg(tr("ssh-agent 中没有可用的密钥", "ssh-agent holds no keys")));
+        return Err(AppError::msg(tr("ssh-agent 中没有可用的密钥", "No keys available in ssh-agent")));
     }
     let hash = handle.best_supported_rsa_hash().await?.flatten();
     for identity in identities {
@@ -247,7 +254,7 @@ impl ExecOutput {
         }
         let detail = self.stderr.trim();
         Err(AppError::msg(if detail.is_empty() {
-            format!("{} ({} {})", tr("命令执行失败", "Command failed"), tr("退出码", "exit code"), self.code)
+            format!("{}{}{}", tr("命令执行失败（退出码 ", "Command failed (exit code "), self.code, tr("）", ")"))
         } else {
             detail.to_string()
         }))
@@ -273,15 +280,18 @@ pub struct Names {
 
 pub struct Session {
     pub handle: client::Handle<ClientHandler>,
+    /// 实际连上的服务器地址。
+    pub peer: SocketAddr,
     sftp: OnceCell<Arc<SftpSession>>,
     pub names: OnceCell<Names>,
     term: Mutex<Option<mpsc::UnboundedSender<TermCmd>>>,
 }
 
 impl Session {
-    pub fn new(handle: client::Handle<ClientHandler>) -> Self {
+    fn new(handle: client::Handle<ClientHandler>, peer: SocketAddr) -> Self {
         Self {
             handle,
+            peer,
             sftp: OnceCell::new(),
             names: OnceCell::new(),
             term: Mutex::new(None),
@@ -328,6 +338,7 @@ impl Session {
 pub struct AppState {
     sessions: RwLock<HashMap<String, Arc<Session>>>,
     pub transfers: transfer::Manager,
+    pub tunnel: crate::tunnel::Manager,
 }
 
 impl AppState {
@@ -366,12 +377,9 @@ pub async fn ssh_connect(state: State<'_, AppState>, request: ConnectRequest) ->
         auth,
         known_host_keys,
     } = request;
-    let handle = connect(&host, port, &username, auth, known_host_keys).await?;
+    let session = connect(&host, port, &username, auth, known_host_keys).await?;
     let id = uuid::Uuid::new_v4().to_string();
-    state
-        .sessions
-        .write()
-        .insert(id.clone(), Arc::new(Session::new(handle)));
+    state.sessions.write().insert(id.clone(), Arc::new(session));
     Ok(id)
 }
 
@@ -387,7 +395,7 @@ fn inspect_key(name: String, content: String) -> Result<ImportedKey> {
     let encrypted = match keys::decode_secret_key(&content, None) {
         Ok(_) => false,
         Err(keys::Error::KeyIsEncrypted) => true,
-        Err(e) => return Err(AppError::msg(format!("{}: {e}", tr("不是有效的私钥", "Not a valid private key")))),
+        Err(e) => return Err(AppError::msg(format!("{}{e}", tr("不是有效的私钥：", "Not a valid private key: ")))),
     };
     Ok(ImportedKey {
         name,
@@ -533,7 +541,7 @@ pub mod tests {
         }
     }
 
-    async fn dial(auth: Auth, known: &KnownHostKeys) -> Result<client::Handle<ClientHandler>> {
+    async fn dial(auth: Auth, known: &KnownHostKeys) -> Result<Session> {
         let port = env("SHX_TEST_PORT").parse().unwrap();
         connect("127.0.0.1", port, &env("SHX_TEST_USER"), auth, known.clone()).await
     }
@@ -550,7 +558,7 @@ pub mod tests {
     }
 
     pub async fn session() -> Arc<Session> {
-        Arc::new(Session::new(dial(key("", None), &trusted().await).await.unwrap()))
+        Arc::new(dial(key("", None), &trusted().await).await.unwrap())
     }
 
     #[tokio::test]

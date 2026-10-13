@@ -12,5 +12,10 @@
         "decorations": false
       }
     ]
+  },
+  "bundle": {
+    "resources": [
+      "wintun.dll"
+    ]
   }
 }

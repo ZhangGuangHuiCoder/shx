@@ -31,7 +31,7 @@ fn cipher() -> XChaCha20Poly1305 {
 
 fn seal(content: &str) -> Result<Vec<u8>> {
     let mut nonce = [0u8; NONCE_LEN];
-    getrandom::fill(&mut nonce).map_err(|e| AppError::msg(format!("{}: {e}", tr("无法生成随机数", "Cannot generate random data"))))?;
+    getrandom::fill(&mut nonce).map_err(|e| AppError::msg(format!("{}{e}", tr("无法生成随机数：", "Could not generate random data: "))))?;
     let payload = Payload {
         msg: content.as_bytes(),
         aad: MAGIC,
@@ -44,12 +44,12 @@ fn seal(content: &str) -> Result<Vec<u8>> {
 
 fn open(file: &[u8]) -> Result<String> {
     let damaged = || AppError::msg(tr(
-            "备份文件已损坏或被修改，无法导入",
-            "The backup file is damaged or has been modified and cannot be imported",
+            "备份文件已损坏或被篡改，无法恢复",
+            "The backup file is damaged or has been modified and cannot be restored",
         ));
     let body = file
         .strip_prefix(MAGIC)
-        .ok_or_else(|| AppError::msg(tr("不是 shx 的配置备份文件", "Not an shx configuration backup file")))?;
+        .ok_or_else(|| AppError::msg(tr("不是 shx 配置备份文件", "Not an shx configuration backup file")))?;
     if body.len() < NONCE_LEN {
         return Err(damaged());
     }
@@ -86,7 +86,7 @@ pub fn config_export(path: String, content: String) -> Result<()> {
 pub fn config_import(path: String) -> Result<String> {
     if std::fs::metadata(&path)?.len() > MAX_IMPORT_SIZE {
         return Err(AppError::msg(tr(
-            "文件过大，不是 shx 的配置备份文件",
+            "文件过大，不是 shx 配置备份文件",
             "The file is too large to be an shx configuration backup",
         )));
     }
@@ -159,7 +159,7 @@ mod tests {
 
         // 手写的明文 JSON“备份”不能被导入。
         std::fs::write(dir.join("plain.json"), CONTENT).unwrap();
-        assert_eq!(import("plain.json").unwrap_err().to_string(), "不是 shx 的配置备份文件");
+        assert_eq!(import("plain.json").unwrap_err().to_string(), "不是 shx 配置备份文件");
         std::fs::write(dir.join("empty"), "").unwrap();
         assert!(import("empty").is_err());
         assert!(import("missing").is_err());

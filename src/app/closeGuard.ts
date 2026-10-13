@@ -1,4 +1,4 @@
-// 关闭主窗口即退出应用，所有 SSH 会话随之断开；因此有会话打开时，
+// 关闭主窗口即退出应用，所有 SSH 会话随之断开，开着的隧道也随之关闭；因此有会话或隧道时，
 // 两种退出方式（关闭窗口、菜单里的“退出”）都先询问。
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { t } from "../shared/i18n";
@@ -10,18 +10,23 @@ import { revealWindow } from "./window";
 let asking: Promise<boolean> | null = null;
 
 /** 还连着的会话数：退出或重启应用会把它们全部断开。 */
-export const openSessionCount = () => useApp().tabs.filter((tab) => tab.status !== "closed").length;
+const openSessionCount = () => useApp().tabs.filter((tab) => tab.status !== "closed").length;
 
-/** 应用能否退出：没有会话时立即得出结果，否则等用户回答。 */
-function mayClose(): Promise<boolean> {
+/** 退出或重启应用会断开、关闭的东西，写成询问里的话；什么都没有时是空字符串。 */
+export function quitConsequences(): string {
   const count = openSessionCount();
-  if (!count) return Promise.resolve(true);
+  const lines = [count ? t("app.quitBody", { count }) : "", useApp().tunnel ? t("app.quitTunnel") : ""];
+  return lines.filter(Boolean).join("\n");
+}
+
+/** 应用能否退出：没有会话也没有隧道时立即得出结果，否则等用户回答。 */
+function mayClose(): Promise<boolean> {
+  const consequences = quitConsequences();
+  if (!consequences) return Promise.resolve(true);
   if (!asking) {
     // 窗口最小化时也能选“退出”，必须让用户看到这个询问。
     void revealWindow();
-    asking = confirm(t("app.quitTitle"), t("app.quitBody", { count }), { danger: true, ok: t("app.quitOk") }).finally(
-      () => (asking = null),
-    );
+    asking = confirm(t("app.quitTitle"), consequences, { danger: true, ok: t("app.quitOk") }).finally(() => (asking = null));
   }
   return asking;
 }

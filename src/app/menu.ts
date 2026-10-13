@@ -112,12 +112,6 @@ export function appMenu(): TopMenu[] {
   const file: TopMenu = {
     label: t("menu.file"),
     items: [
-      // 双击文件的行为。文件类型列表需要编辑界面，所以那一项会打开一个窗口；
-      // 其他文件的处理方式直接在这里选。
-      { type: "item", label: t("menu.editRules"), action: openRulesDialog },
-      { type: "item", label: t("menu.commands"), action: () => openAssistant() },
-      { type: "submenu", label: t("settings.otherDoubleClick"), items: choices("otherDoubleClick", DOUBLE_CLICK.map(([value, label]) => [value, t(label)])) },
-      SEPARATOR,
       { type: "item", label: t("menu.exportConfig"), action: exportBackup },
       { type: "item", label: t("menu.importConfig"), action: importBackup },
       SEPARATOR,
@@ -136,48 +130,58 @@ export function appMenu(): TopMenu[] {
       native("SelectAll", t("common.selectAll")),
     ],
   };
+  /** 一处字号的三个动作。只有终端的带快捷键。 */
+  const fontSize = (label: MessageKey, key: FontSetting, shortcuts: boolean): MenuNode => ({
+    type: "submenu",
+    label: t(label),
+    items: [
+      { type: "item", label: t("menu.fontUp"), accelerator: shortcuts ? "CmdOrCtrl+=" : undefined, action: resize(key, 1) },
+      { type: "item", label: t("menu.fontDown"), accelerator: shortcuts ? "CmdOrCtrl+-" : undefined, action: resize(key, -1) },
+      { type: "item", label: t("menu.fontReset"), accelerator: shortcuts ? "CmdOrCtrl+0" : undefined, action: reset(key) },
+    ],
+  });
+  // 显示：从上到下是窗口里有什么（文件管理器、状态栏）、字、整体的样子。
   const view: TopMenu = {
     label: t("menu.view"),
     items: [
+      toggle("showFiles", "menu.showFiles"),
+      {
+        // 文件管理器隐藏时，选位置看不到任何效果，所以停用。
+        type: "submenu",
+        label: t("menu.filePosition"),
+        enabled: () => settings.showFiles,
+        items: choices("fileLayout", FILE_LAYOUTS.map(([value, label]) => [value, t(label)])),
+      },
       toggle("showHidden", "menu.showHidden"),
       SEPARATOR,
-      { type: "item", label: t("menu.termFontUp"), accelerator: "CmdOrCtrl+=", action: resize("terminalFontSize", 1) },
-      { type: "item", label: t("menu.termFontDown"), accelerator: "CmdOrCtrl+-", action: resize("terminalFontSize", -1) },
-      { type: "item", label: t("menu.termFontReset"), accelerator: "CmdOrCtrl+0", action: reset("terminalFontSize") },
+      toggle("showStatusBar", "menu.showStatusBar"),
       SEPARATOR,
-      { type: "item", label: t("menu.editorFontUp"), action: resize("editorFontSize", 1) },
-      { type: "item", label: t("menu.editorFontDown"), action: resize("editorFontSize", -1) },
-      { type: "item", label: t("menu.editorFontReset"), action: reset("editorFontSize") },
+      fontSize("menu.termFontSize", "terminalFontSize", true),
+      fontSize("menu.editorFontSize", "editorFontSize", false),
       { type: "submenu", label: t("menu.font"), items: choices("font", FONTS.map(([value, label]) => [value, t(label)])) },
       SEPARATOR,
-      {
-        // 布局：会话里要不要文件管理器、它放在哪一侧，以及窗口底部要不要状态栏。
-        type: "submenu",
-        label: t("menu.layout"),
-        items: [
-          toggle("showFiles", "menu.showFiles"),
-          {
-            // 文件管理器隐藏时，选位置看不到任何效果，所以停用。
-            type: "submenu",
-            label: t("menu.filePosition"),
-            enabled: () => settings.showFiles,
-            items: choices("fileLayout", FILE_LAYOUTS.map(([value, label]) => [value, t(label)])),
-          },
-          SEPARATOR,
-          toggle("showStatusBar", "menu.showStatusBar"),
-        ],
-      },
-      { type: "submenu", label: t("menu.language"), items: choices("language", LOCALES.map(({ value, label }) => [value, label])) },
       { type: "submenu", label: t("menu.theme"), items: choices("theme", THEMES.map(([value, label]) => [value, t(label)])) },
+      { type: "submenu", label: t("menu.language"), items: choices("language", LOCALES.map(({ value, label }) => [value, label])) },
       SEPARATOR,
       CUSTOM_TITLEBAR
         ? { type: "item", label: t("menu.fullscreen"), accelerator: "F11", action: () => void toggleFullscreen() }
         : native("Fullscreen", t("menu.fullscreen")),
     ],
   };
-  if (!CUSTOM_TITLEBAR) return [application, file, edit, view];
+  const tools: TopMenu = {
+    label: t("menu.tools"),
+    items: [
+      { type: "item", label: t("menu.commands"), action: () => openAssistant() },
+      SEPARATOR,
+      // 双击文件的行为。文件类型列表需要编辑界面，所以那一项会打开一个窗口；
+      // 其他文件的处理方式直接在这里选。
+      { type: "item", label: t("menu.editRules"), action: openRulesDialog },
+      { type: "submenu", label: t("settings.otherDoubleClick"), items: choices("otherDoubleClick", DOUBLE_CLICK.map(([value, label]) => [value, t(label)])) },
+    ],
+  };
+  if (!CUSTOM_TITLEBAR) return [application, file, edit, view, tools];
   const help: TopMenu = { label: t("menu.help"), items: [checkUpdate, SEPARATOR, aboutItem] };
-  return [file, view, help];
+  return [file, view, tools, help];
 }
 
 // ---- 原生菜单栏 ------------------------------------------------------------

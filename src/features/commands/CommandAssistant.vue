@@ -485,18 +485,6 @@ h4::after {
   background: var(--accent-soft);
 }
 
-/* 当前项左侧的一道色条。 */
-.item.active::before {
-  content: "";
-  position: absolute;
-  top: 11px;
-  bottom: 11px;
-  left: 0;
-  width: 3px;
-  border-radius: 2px;
-  background: var(--accent);
-}
-
 .item.active .glyph {
   background: var(--accent);
   color: #fff;

@@ -9,27 +9,29 @@
 
 <p align="center"><a href="README.md">English</a> · 简体中文</p>
 
-Shx 是一个桌面 SSH 客户端：终端和 SFTP 文件管理器并排在同一个窗口里。不需要账号，不经过云端，
-所有配置都保存在本机。
+Shx 是一款桌面 SSH 客户端，终端与 SFTP 文件管理器在同一窗口并排显示。无需账号，不经云端，
+所有数据保存在本机。
 
 ## 特性
 
-- **终端**：xterm.js，支持查找；可选保活，shell 运行在服务器的 tmux 里，断线后程序继续运行。
-  一台主机可以开多个会话。
-- **文件**：跟随终端 `cd` 的 SFTP 文件管理器，带目录树、目录收藏、权限修改、压缩解压和内置的 Monaco 编辑器。
-- **传输**：上传下载队列，可暂停、续传、重试；目录可以先在服务器上打包，再作为一个压缩包下载。
-- **命令助手**：内置近 300 条常用命令，分 15 类，可搜索、收藏，也可以添加自己的命令。
-- **主机**：分组、置顶、图标和颜色；支持密码、私钥和 ssh-agent 登录。
-- **本地优先**：深浅主题，中英文界面，配置可以备份成加密文件、再恢复回来。
+- **终端**：基于 xterm.js，支持查找和多会话；可选 tmux 保活，断线后程序继续运行。
+- **文件**：SFTP 文件管理器，跟随终端 `cd`；目录树、收藏、权限修改、压缩解压、内置 Monaco 编辑器。
+- **传输**：上传下载队列，支持暂停、续传和重试；目录可在服务器端打包后下载。
+- **命令助手**：内置近 300 条常用命令，支持搜索、收藏和自定义。
+- **主机**：分组、置顶、图标与颜色；支持密码、私钥和 ssh-agent 认证。
+- **隧道**：经 SSH 主机转发本机流量，支持全局与按网段分流；服务器端无需 root 权限或额外组件。
+- **其他**：深色与浅色主题，中英文界面，配置支持加密备份与恢复。
 
 ## 下载
 
 在 [Releases](https://github.com/ZhangGuangHuiCoder/shx/releases) 下载 macOS（通用）或 Windows
-的安装包。安装包没有签名，第一次打开时系统会要求确认。
+的安装包。安装包未签名，首次打开时系统会要求确认。
+
+应用启动时自动检查更新，也可通过菜单“检查更新…”手动检查。更新包下载后以内置公钥验证签名。
 
 ## 构建
 
-需要 Node ≥ 20.19、pnpm、Rust 稳定版。
+依赖 Node ≥ 20.19、pnpm 和 Rust 稳定版。
 
 ```bash
 pnpm install
@@ -37,37 +39,31 @@ pnpm tauri dev
 pnpm tauri build
 ```
 
-## 更新和发布
+发布新版本运行 `pnpm release`：升级补丁版本号并推送标签，由
+[release.yml](.github/workflows/release.yml) 构建、签名并发布安装包。仓库 Secrets 需配置
+`TAURI_SIGNING_PRIVATE_KEY`。请妥善备份私钥：一旦丢失，已安装的应用将无法更新。
 
-应用不会自己检查更新。菜单里的“检查更新…”（macOS 在 shx 菜单，Windows 在“帮助”菜单）会到
-[GitHub Releases](https://github.com/ZhangGuangHuiCoder/shx/releases) 上看有没有新版本，
-有就提示更新。更新包下载后用内置的公钥验证签名。
+## 数据与安全
 
-发布新版本：
-
-```bash
-pnpm version patch
-git push --follow-tags
-```
-
-`v*` 标签会触发 [release.yml](.github/workflows/release.yml)：构建 macOS 和 Windows 的安装包，
-给更新包签名后发布。仓库的 Secrets 里需要有 `TAURI_SIGNING_PRIVATE_KEY`（签名私钥的内容）。
-私钥请妥善备份：丢了以后，已安装的应用就无法再更新。
-
-## 数据和安全
-
-- **存储**：主机配置、记住的密码和导入的私钥保存在应用的 localStorage 里（键名以 `shx.` 开头），
-  未加密。请只在信任的电脑上使用“记住密码”。
-- **主机指纹**：首次连接时确认并由应用保存，指纹变化时提醒。不读写 `~/.ssh` 和系统钥匙串。
-- **备份**：文件 → 备份配置… / 恢复配置… 读写加密的 `.shxbak` 文件。密钥内置在程序中，不等同于口令保护。
+- **存储**：主机配置、已保存的密码和导入的私钥存放在应用的 localStorage 中，未加密。
+  请仅在可信设备上使用“记住密码”。
+- **主机指纹**：首次连接时确认并由应用保存，指纹变更时发出警告。不读写 `~/.ssh` 和系统钥匙串。
+- **备份**：`.shxbak` 文件以内置于程序的密钥加密，不等同于口令保护。
+- **隧道**：开启时需管理员权限。提权的助手进程仅负责创建虚拟网卡和路由，关闭隧道或退出 shx 时
+  一并移除；SSH 连接与凭据留在未提权的主进程。
+  - 仅转发 IPv4 TCP，DNS 查询改用 TCP 转发；其他 UDP 与 ICMP 被丢弃，IPv6 不经隧道，不修改 DNS 设置。
+  - macOS 的“免密码开启”会安装一个 root 所有的 setuid 助手。它无法识别调用者，本机其他程序
+    也可调用它创建虚拟网卡和路由；关闭该选项即卸载。
 
 ## 技术栈
 
-Tauri 2 · Rust · russh · russh-sftp · tokio · Vue 3 · Pinia · Naive UI · xterm.js · Monaco · TypeScript · Vite
+Tauri 2 · Rust · russh · russh-sftp · tokio · tun-rs · smoltcp · Vue 3 · Pinia · Naive UI · xterm.js · Monaco · TypeScript · Vite
 
 ## 协议
 
-[Apache-2.0](LICENSE)
+[Apache-2.0](LICENSE)。随程序分发的第三方组件沿用各自的协议：
 
-内置的等宽字体 [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) 以
-[SIL Open Font License 1.1](public/licenses/JetBrainsMono-OFL.txt) 授权。
+- [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono)：
+  [SIL Open Font License 1.1](public/licenses/JetBrainsMono-OFL.txt)
+- [Wintun](https://www.wintun.net) 0.14.1（Windows 版隧道的驱动库，未经修改）：
+  [Prebuilt Binaries License](public/licenses/Wintun-LICENSE.txt)

@@ -15,18 +15,18 @@ pub enum AppError {
         algorithm: String,
     },
     #[error("{}", tr(
-        "主机密钥与上次连接时保存的不一致：可能是服务器重装，也可能存在中间人攻击",
-        "The host key differs from the one saved earlier: the server may have been reinstalled, or this may be a man-in-the-middle attack"
+        "主机密钥与本地记录不一致：服务器可能已重装，也可能存在中间人攻击",
+        "The host key does not match the saved one: the server may have been reinstalled, or this may be a man-in-the-middle attack"
     ))]
     HostKeyChanged {
         fingerprint: String,
         algorithm: String,
     },
-    #[error("{}", tr("需要输入私钥口令", "The private key needs a passphrase"))]
+    #[error("{}", tr("需要输入私钥口令", "The private key requires a passphrase"))]
     PassphraseRequired,
     #[error("{}", tr("认证失败，请检查用户名、密码或密钥", "Authentication failed; check the username, password or key"))]
     AuthFailed,
-    #[error("{}", tr("会话不存在或已断开", "The session does not exist or has been disconnected"))]
+    #[error("{}", tr("会话不存在或已断开", "The session does not exist or is disconnected"))]
     NoSession,
     #[error("{}", tr("已取消", "Cancelled"))]
     Cancelled,
@@ -36,7 +36,7 @@ pub enum AppError {
     Sftp(#[from] russh_sftp::client::error::Error),
     #[error("{0}")]
     Io(#[from] std::io::Error),
-    #[error("{label}: {0}", label = tr("密钥", "Key"))]
+    #[error("{label}{0}", label = tr("密钥：", "Key: "))]
     Keys(#[from] russh::keys::Error),
 }
 

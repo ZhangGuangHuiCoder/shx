@@ -15,7 +15,10 @@ withDefaults(defineProps<{ /** `icon` 插槽自己绘制图标时不需要。 */
       <slot name="icon"><component :is="icon" :size="18" :stroke-width="1.9" /></slot>
     </div>
     <div class="titles">
-      <div class="title">{{ title }}</div>
+      <div class="title-row">
+        <div class="title">{{ title }}</div>
+        <slot name="tagline" />
+      </div>
       <div v-if="detail" class="detail" :title="detail">{{ detail }}</div>
     </div>
     <slot />
@@ -49,6 +52,17 @@ withDefaults(defineProps<{ /** `icon` 插槽自己绘制图标时不需要。 */
 .titles {
   flex: 1;
   min-width: 0;
+}
+
+.title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.title-row .title {
+  flex-shrink: 0;
 }
 
 .title {

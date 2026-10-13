@@ -7,7 +7,8 @@ import { parseCustomCommand, removeCommand, restoreDefaults, toggleFavorite, typ
 import { planSession, slotOf } from "../features/session/keepAlive";
 import { FILE_TREE_DEFAULT_WIDTH } from "../features/session/layout";
 import { chooseSession } from "../features/session/sessionChooser";
-import { api, errorMessage, type AppError, type ConnectAuth, type Profile, type StoredKey, type Transfer } from "../shared/api";
+import { defaultTunnelConfig, parseTunnelConfig, rate, tunnelRequest } from "../features/tunnel/tunnel";
+import { api, errorMessage, type AppError, type ConnectAuth, type Profile, type StoredKey, type Transfer, type TunnelConfig, type TunnelStatus } from "../shared/api";
 import { applyFont, isFontSetting } from "../shared/fonts";
 import { isLocale, locale, systemLocale, t } from "../shared/i18n";
 import { DEFAULT_EDIT_RULES, defaultSettings, readStored, STORAGE, type Settings } from "../shared/settings";
@@ -46,6 +47,29 @@ export interface Tab {
   /** 终端此刻是否在该会话里（服务器没有 tmux 时不在）。 */
   attached: boolean;
 }
+
+/** 连接主机的结局。用户在某个询问中放弃时是 `cancelled`：用户自己清楚为什么没连上。 */
+type Connected =
+  | { outcome: "connected"; sessionId: string }
+  | { outcome: "cancelled" | "failed"; reason: string; /** 得有用户的回答才能继续，而这次连接不许询问。 */ needsUser?: boolean };
+
+/** 正开着（或正在开、正在关）的隧道。机器上同一时刻只有一条。 */
+export interface TunnelRun {
+  /** 作为出口的主机。 */
+  profileId: string;
+  /** 承载隧道的 SSH 会话，它是隧道专用的，不属于任何标签页；重连期间没有。 */
+  sessionId: string | null;
+  phase: "starting" | "running" | "reconnecting" | "stopping";
+  status: TunnelStatus | null;
+  /** 每秒的上行、下行流量（字节）。 */
+  upRate: number;
+  downRate: number;
+}
+
+/** 承载隧道的连接断开后，隔多久重连一次（秒）；用完之后一直按最后一个。 */
+const TUNNEL_RETRY = [1, 3, 8, 15, 30, 60];
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * 与 localStorage 同步的 ref。应用的全部数据都存在那里：会话配置、记住的密码、
@@ -151,6 +175,9 @@ export const useApp = defineStore("app", () => {
   const connecting = ref<Tab[]>([]);
   const activeKey = ref<string | null>(null);
   const transfers = ref<Transfer[]>([]);
+  /** 这个系统上能不能用隧道。 */
+  const tunnelSupported = ref(false);
+  const tunnel = ref<TunnelRun | null>(null);
 
   function resetEditRules() {
     settings.editRules = [...DEFAULT_EDIT_RULES];
@@ -171,6 +198,8 @@ export const useApp = defineStore("app", () => {
         void api.disconnect(payload.id);
       }
     });
+    await listen<TunnelStatus>("tunnel-update", ({ payload }) => onTunnelUpdate(payload));
+    await initTunnel();
   }
 
   /**
@@ -188,6 +217,8 @@ export const useApp = defineStore("app", () => {
   }
 
   function deleteProfile(id: string) {
+    // 这台主机正当着隧道的出口：配置没了就没法重连，隧道一并关掉。
+    if (tunnel.value?.profileId === id) void stopTunnel();
     profiles.value = profiles.value.filter((p) => p.id !== id);
     delete secrets.value[id];
   }
@@ -269,25 +300,15 @@ export const useApp = defineStore("app", () => {
   }
 
   /**
-   * 连接标签页，按服务器的要求依次询问主机密钥信任和凭据。返回连接的结局；
-   * 失败原因留在 `tab.error` 里。用户在某个询问中放弃时结果是 `cancelled`：
-   * 用户自己清楚为什么没连上。
+   * 连接主机，按服务器的要求依次询问主机密钥信任和凭据。`ask` 为 false 时不弹任何询问
+   * （后台重连用）：需要用户回答的地方一律算失败。`host` 指定实际连到哪个地址，默认是配置里的；
+   * 主机密钥仍按配置里的地址来认。
    */
-  async function connectTab(tab: Tab): Promise<"connected" | "cancelled" | "failed"> {
-    const profile = profiles.value.find((p) => p.id === tab.profileId);
-    if (!profile) {
-      // 会话配置在标签页打开期间被删除了：没有可以用来连接的信息。
-      tab.status = "closed";
-      return "cancelled";
-    }
-    tab.status = "connecting";
-    tab.error = null;
-    const fail = (reason: string, outcome: "cancelled" | "failed" = "failed") => {
-      tab.error = reason;
-      tab.status = "closed";
-      return outcome;
-    };
-    const cancelled = (reason: string) => fail(reason, "cancelled");
+  async function connectProfile(profile: Profile, opts: { ask?: boolean; host?: string } = {}): Promise<Connected> {
+    const fail = (reason: string): Connected => ({ outcome: "failed", reason });
+    const cancelled = (reason: string): Connected => ({ outcome: "cancelled", reason });
+    const silent = opts.ask === false;
+    const needsUser: Connected = { outcome: "failed", reason: t("conn.needsUser"), needsUser: true };
 
     const hostKey = `${profile.host}:${profile.port}`;
     const key = keys.value.find((k) => k.id === profile.keyId);
@@ -306,7 +327,10 @@ export const useApp = defineStore("app", () => {
       remember = answer?.checked ?? false;
       return answer !== null;
     };
-    if (profile.auth === "password" && !secret && !(await askSecret(t("conn.enterPassword")))) return cancelled(t("common.cancelled"));
+    if (profile.auth === "password" && !secret) {
+      if (silent) return needsUser;
+      if (!(await askSecret(t("conn.enterPassword")))) return cancelled(t("common.cancelled"));
+    }
 
     for (;;) {
       const auth: ConnectAuth =
@@ -316,21 +340,24 @@ export const useApp = defineStore("app", () => {
             ? { type: "key", content: key!.content, passphrase: secret ?? null }
             : { type: "agent" };
       try {
-        tab.sessionId = await api.connect({
-          host: profile.host,
+        const sessionId = await api.connect({
+          host: opts.host ?? profile.host,
           port: profile.port,
           username: profile.username,
           auth,
           knownHostKeys: knownHosts.value[hostKey] ?? {},
         });
-        tab.status = "connected";
         if (remember && secret) saveProfile({ ...profile, saveSecret: true }, secret);
-        return "connected";
+        return { outcome: "connected", sessionId };
       } catch (e) {
         const err = e as AppError;
         const trust = () => {
           knownHosts.value[hostKey] = { ...knownHosts.value[hostKey], [err.algorithm!]: err.fingerprint! };
         };
+        const wrongPassword = err.kind === "authFailed" && profile.auth === "password";
+        const answerable = err.kind === "hostKeyUnknown" || err.kind === "hostKeyChanged" || err.kind === "passphraseRequired" || wrongPassword;
+        if (!answerable) return fail(errorMessage(e));
+        if (silent) return needsUser;
         if (err.kind === "hostKeyUnknown") {
           const ok = await confirm(
             t("conn.unknownHostTitle"),
@@ -349,13 +376,32 @@ export const useApp = defineStore("app", () => {
           trust();
         } else if (err.kind === "passphraseRequired") {
           if (!(await askSecret(t("conn.enterPassphrase")))) return cancelled(t("common.cancelled"));
-        } else if (err.kind === "authFailed" && profile.auth === "password") {
-          if (!(await askSecret(t("conn.wrongPassword")))) return cancelled(t("common.cancelled"));
-        } else {
-          return fail(errorMessage(e));
+        } else if (!(await askSecret(t("conn.wrongPassword")))) {
+          return cancelled(t("common.cancelled"));
         }
       }
     }
+  }
+
+  /** 连接标签页。返回连接的结局；失败原因留在 `tab.error` 里。 */
+  async function connectTab(tab: Tab): Promise<"connected" | "cancelled" | "failed"> {
+    const profile = profiles.value.find((p) => p.id === tab.profileId);
+    if (!profile) {
+      // 会话配置在标签页打开期间被删除了：没有可以用来连接的信息。
+      tab.status = "closed";
+      return "cancelled";
+    }
+    tab.status = "connecting";
+    tab.error = null;
+    const result = await connectProfile(profile);
+    if (result.outcome === "connected") {
+      tab.sessionId = result.sessionId;
+      tab.status = "connected";
+    } else {
+      tab.error = result.reason;
+      tab.status = "closed";
+    }
+    return result.outcome;
   }
 
   /** 标签页显示的名字。保活主机同时开着几个会话，或者进的不是 1 号时，带上会话的编号。 */
@@ -495,6 +541,127 @@ export const useApp = defineStore("app", () => {
     await api.disconnect(tab.sessionId).catch(() => {});
   }
 
+  // ---- 隧道 ----------------------------------------------------------------
+
+  function saveTunnelConfig(id: string, config: TunnelConfig) {
+    const p = profiles.value.find((x) => x.id === id);
+    if (p) p.tunnel = config;
+  }
+
+  /** 上一次状态里的流量计数，用来算速率。 */
+  let tunnelCounted: { up: number; down: number; at: number } | null = null;
+
+  function setTunnelStatus(run: TunnelRun, status: TunnelStatus) {
+    const at = Date.now();
+    run.upRate = rate(tunnelCounted && { bytes: tunnelCounted.up, at: tunnelCounted.at }, status.up, at);
+    run.downRate = rate(tunnelCounted && { bytes: tunnelCounted.down, at: tunnelCounted.at }, status.down, at);
+    tunnelCounted = { up: status.up, down: status.down, at };
+    run.status = status;
+  }
+
+  /** 启动时：问清这个系统能不能用隧道。 */
+  async function initTunnel() {
+    tunnelSupported.value = await api.tunnelSupported().catch(() => false);
+    // 界面重新加载之后，后端里还开着的隧道已经没有人管它重连了：关掉。
+    if (tunnelSupported.value && (await api.tunnelStatus().catch(() => null))) await api.tunnelStop().catch(() => {});
+  }
+
+  /**
+   * 开启隧道，以 `profile` 为出口。隧道用自己的一条 SSH 连接，不借用标签页的：
+   * 关掉终端不该让隧道跟着断，隧道里的大流量也不该拖慢终端。
+   */
+  async function startTunnel(profile: Profile) {
+    if (tunnel.value) return;
+    const run: TunnelRun = reactive({ profileId: profile.id, sessionId: null, phase: "starting", status: null, upRate: 0, downRate: 0 });
+    tunnel.value = run;
+    tunnelCounted = null;
+    const failed = (error: string) => message.error(t("tunnel.startFailed", { error }), { duration: 10000, closable: true });
+    try {
+      const connected = await connectProfile(profile);
+      if (connected.outcome !== "connected") {
+        if (connected.outcome === "failed") failed(connected.reason);
+        return;
+      }
+      run.sessionId = connected.sessionId;
+      // 存下来的设置过一遍校验：旧版本留下的、现在已经没有的项不交给后端。
+      const status = await api.tunnelStart(connected.sessionId, tunnelRequest(parseTunnelConfig(profile.tunnel) ?? defaultTunnelConfig()));
+      setTunnelStatus(run, status);
+      run.phase = "running";
+      if (status.warning) message.warning(status.warning, { duration: 15000, closable: true });
+    } catch (e) {
+      // 用户在系统的授权框里点了取消：不必再告诉他一遍。
+      if ((e as AppError).kind !== "cancelled") failed(errorMessage(e));
+    } finally {
+      if (run.phase === "starting") {
+        if (run.sessionId) await api.disconnect(run.sessionId).catch(() => {});
+        if (tunnel.value === run) tunnel.value = null;
+      }
+    }
+  }
+
+  /** 关闭隧道；返回时虚拟网卡和路由已经撤掉。 */
+  async function stopTunnel() {
+    const run = tunnel.value;
+    // 正在启动的拦不住（可能正等着用户输系统密码）；正在关的不用再关一次。
+    if (!run || run.phase === "starting" || run.phase === "stopping") return;
+    run.phase = "stopping";
+    await api.tunnelStop().catch((e) => message.error(errorMessage(e)));
+    if (run.sessionId) await api.disconnect(run.sessionId).catch(() => {});
+    if (tunnel.value === run) tunnel.value = null;
+  }
+
+  function onTunnelUpdate(status: TunnelStatus) {
+    const run = tunnel.value;
+    // 启动和关闭过程中的状态由发起的那一方自己处理。
+    if (!run || run.phase === "starting" || run.phase === "stopping") return;
+    if (status.state === "stopped") {
+      // 隧道自己没了（助手进程退出之类）：承载它的连接也不必留着。
+      tunnel.value = null;
+      if (run.sessionId) void api.disconnect(run.sessionId).catch(() => {});
+      if (status.error) message.error(status.error, { duration: 15000, closable: true });
+      return;
+    }
+    setTunnelStatus(run, status);
+    if (status.state === "reconnecting" && run.phase === "running") {
+      run.phase = "reconnecting";
+      void reconnectTunnel(run);
+    }
+  }
+
+  /**
+   * 承载隧道的连接断了：在后台一直重连，直到连上或者隧道被关掉。这期间流量仍被引进隧道
+   * （哪儿也去不了），不会悄悄改成直连。重连不弹任何询问；非得用户回答不可时关掉隧道。
+   */
+  async function reconnectTunnel(run: TunnelRun) {
+    const waiting = () => tunnel.value === run && run.phase === "reconnecting";
+    const old = run.sessionId;
+    run.sessionId = null;
+    if (old) await api.disconnect(old).catch(() => {});
+    for (let attempt = 0; waiting(); attempt++) {
+      await sleep(TUNNEL_RETRY[Math.min(attempt, TUNNEL_RETRY.length - 1)] * 1000);
+      if (!waiting()) return;
+      const profile = profiles.value.find((p) => p.id === run.profileId);
+      if (!profile) return void stopTunnel();
+      // 连回原来那个地址：只有它绕开了隧道，主机名这时也未必解析得了。
+      const connected = await connectProfile(profile, { ask: false, host: run.status?.server }).catch((e): Connected => ({ outcome: "failed", reason: errorMessage(e) }));
+      if (connected.outcome !== "connected") {
+        if (!connected.needsUser || !waiting()) continue;
+        message.error(t("tunnel.reconnectNeedsUser", { reason: connected.reason }), { duration: 0, closable: true });
+        return void stopTunnel();
+      }
+      if (!waiting()) return void api.disconnect(connected.sessionId).catch(() => {});
+      try {
+        setTunnelStatus(run, await api.tunnelAttach(connected.sessionId));
+        run.sessionId = connected.sessionId;
+        run.phase = "running";
+      } catch (e) {
+        await api.disconnect(connected.sessionId).catch(() => {});
+        message.error(errorMessage(e), { duration: 15000, closable: true });
+        return void stopTunnel();
+      }
+    }
+  }
+
   const snapshot = (): ConfigData => ({
     profiles: profiles.value,
     secrets: secrets.value,
@@ -524,6 +691,7 @@ export const useApp = defineStore("app", () => {
     profiles, keys, commands, saveCommand, deleteCommand, restoreCommands, tabs, tabLabel, connecting, activeKey, transfers, settings, sidebar, fileTree,
     init, saveProfile, deleteProfile, duplicateProfile, togglePinned, toggleKeepAlive, toggleFavoriteDir, toggleGroupCollapsed, reorderProfiles,
     importKey, deleteKey, importConfig, openTab, goHome, reconnect, closeTab, clearTransfers, resetEditRules,
+    tunnelSupported, tunnel, saveTunnelConfig, startTunnel, stopTunnel,
   };
 });
 

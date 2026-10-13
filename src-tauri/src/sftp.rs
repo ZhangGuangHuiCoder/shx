@@ -361,7 +361,7 @@ async fn read_text(sftp: &SftpSession, path: &str) -> Result<TextFile> {
     if size > MAX_TEXT_SIZE {
         return Err(AppError::msg(tr(
             "文件超过 4 MB，请下载后编辑",
-            "The file is larger than 4 MB; download it to edit",
+            "The file exceeds 4 MB; download it to edit",
         )));
     }
     // 宁可拒绝也不做有损解码：保存有损解码的结果会损坏文件。
