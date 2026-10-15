@@ -1,0 +1,76 @@
+[package]
+name = "shx"
+# 版本号以 package.json 为准，此处不改。
+version = "0.1.0"
+description = "Explore Beyond the Shell."
+edition = "2021"
+license = "Apache-2.0"
+# 防止误发布到 crates.io。
+publish = false
+
+[lib]
+# 库名不能与可执行文件同名（见 cargo#8519）。
+name = "shx_lib"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["macos-private-api"] }
+tauri-plugin-clipboard-manager = "2.4.1"
+tauri-plugin-dialog = "2.8.1"
+tauri-plugin-opener = "2"
+tauri-plugin-process = "2.4.0"
+tauri-plugin-updater = "2.13.3"
+
+russh = { version = "0.64.1", default-features = false, features = ["flate2", "ring", "rsa"] }
+russh-sftp = "3.0.1"
+
+futures = "0.3.34"
+tokio = { version = "1.53.2", features = ["rt", "macros", "sync", "time", "fs", "io-util", "net", "signal"] }
+
+# TUN：用户态 TCP/IP 协议栈。
+netstack-smoltcp = "0.2.4"
+
+chacha20poly1305 = "0.11.0"
+getrandom = "0.4.3"
+
+dirs = "7.0.0"
+parking_lot = "0.12.5"
+serde = { version = "1", features = ["derive"] }
+# Tauri 生成的插件配置代码需要 serde_json。
+serde_json = "1"
+thiserror = "2.0.21"
+uuid = { version = "1.28.0", features = ["v4"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSApplication", "NSMenu", "NSMenuItem", "NSResponder"] }
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSString", "NSUserDefaults"] }
+
+# TUN：虚拟网卡与路由表。
+[target.'cfg(any(target_os = "macos", windows))'.dependencies]
+tun-rs = { version = "2.8.11", features = ["async"] }
+route_manager = "0.2.16"
+# 接管本地路由（macOS）。
+getifaddrs = "0.6.2"
+
+# TUN 的 Windows 部分：UAC 提权、管道进程校验、系统 DNS。
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_System_Pipes",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+# 体积优化
+[profile.release]
+opt-level = 3
+codegen-units = 1
+lto = true
+panic = "abort"
+strip = "symbols"

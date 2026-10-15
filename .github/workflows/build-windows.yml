@@ -1,0 +1,40 @@
+# Windows 测试包：推送 build/** 或手动触发，产物上传为 artifact，不创建 Release。
+name: Windows Test Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["build/**"]
+
+# 新推送取消旧构建。
+concurrency:
+  group: windows-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      # 关闭 LTO 以加快编译。
+      CARGO_PROFILE_RELEASE_LTO: "false"
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm tauri build --bundles nsis
+      - uses: actions/upload-artifact@v7
+        with:
+          name: shx-windows-setup
+          path: src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,63 @@
+# 推送 v* 标签后构建 macOS/Windows 安装包并发布到 GitHub Releases。
+# 需要 Secret：TAURI_SIGNING_PRIVATE_KEY（有密码时再加 TAURI_SIGNING_PRIVATE_KEY_PASSWORD）。
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      # 串行执行，避免并行写 latest.json 互相覆盖。
+      max-parallel: 1
+      matrix:
+        include:
+          - os: macos-latest
+            target: universal-apple-darwin
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            rust-targets: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: pnpm install --no-frozen-lockfile
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tauriScript: pnpm tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: Shell Xplore ${{ github.ref_name }}
+          # 先存为草稿，两个平台都上传后再公开。
+          releaseDraft: true
+          generateReleaseNotes: true
+          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}

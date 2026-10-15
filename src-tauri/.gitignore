@@ -1,0 +1,5 @@
+# Cargo 编译产物
+/target/
+
+# Tauri 生成的 schema
+/gen/schemas
