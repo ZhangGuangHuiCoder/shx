@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="172" height="38" viewBox="1 1 172 38" role="img" aria-label="Shell Xplore">
+  <defs>
+    <linearGradient id="bgLight" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#242B3F"/><stop offset="1" stop-color="#0B1020"/></linearGradient>
+    <linearGradient id="xLight" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#73E2F4"/><stop offset="1" stop-color="#5378FF"/></linearGradient>
+  </defs>
+  <g transform="translate(1 1) scale(.158333333)">
+    <rect x="5" y="5" width="230" height="230" rx="49" fill="url(#bgLight)"/>
+    <rect x="23" y="36" width="194" height="168" rx="19" fill="#151D30" stroke="#46546D" stroke-width="2"/>
+    <path d="M23 56 Q23 36 43 36 H197 Q217 36 217 56 V69 H23Z" fill="#2D3850"/>
+    <circle cx="41" cy="53" r="4" fill="#F27D86"/><circle cx="55" cy="53" r="4" fill="#F2C56E"/><circle cx="69" cy="53" r="4" fill="#70D4AA"/>
+    <path d="M48 112 L72 132 L48 152" fill="none" stroke="#84E6D4" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M82 151 H103" stroke="#84E6D4" stroke-width="8" stroke-linecap="round"/>
+    <path d="M117 96 L180 166 M180 96 L117 166" stroke="url(#xLight)" stroke-width="18" stroke-linecap="round"/>
+  </g>
+  <text x="47" y="27" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="21" font-weight="650" letter-spacing="-.45" fill="#162235">Shell <tspan fill="#087FBA">Xplore</tspan></text>
+</svg>

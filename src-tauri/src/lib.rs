@@ -1,0 +1,100 @@
+mod config;
+mod error;
+mod i18n;
+mod keepalive;
+mod menu;
+mod sftp;
+mod ssh;
+mod transfer;
+mod tunnel;
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    // 以隧道助手身份启动时只执行助手逻辑（见 tunnel/helper.rs）。
+    #[cfg(any(target_os = "macos", windows))]
+    if let Some(code) = tunnel::helper::dispatch() {
+        std::process::exit(code);
+    }
+
+    // 必须在创建应用（及其菜单）之前执行。
+    menu::disable_system_items();
+
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(ssh::AppState::default())
+        // 窗口初始隐藏，由前端绘制完成后显示；兜底：几秒后仍未显示则强制显示。
+        .setup(|app| {
+            if let Some(window) = tauri::Manager::get_webview_window(app, "main") {
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(4));
+                    if !window.is_visible().unwrap_or(true) {
+                        let _ = window.show();
+                    }
+                });
+            }
+            Ok(())
+        })
+        // 主窗口销毁即退出应用。
+        .on_window_event(|window, event| {
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+                tauri::Manager::app_handle(window).exit(0);
+            }
+        })
+        .invoke_handler(tauri::generate_handler![
+            i18n::set_locale,
+            menu::menu_trim,
+            menu::menu_autoenable,
+            ssh::ssh_connect,
+            ssh::ssh_disconnect,
+            ssh::key_import,
+            ssh::agent_add_keys,
+            ssh::term_open,
+            ssh::term_write,
+            ssh::term_resize,
+            keepalive::keepalive_prepare,
+            keepalive::keepalive_list,
+            keepalive::keepalive_end,
+            sftp::sftp_list,
+            sftp::sftp_stat,
+            sftp::sftp_mkdir,
+            sftp::sftp_create_file,
+            sftp::sftp_rename,
+            sftp::sftp_remove,
+            sftp::sftp_move,
+            sftp::sftp_copy,
+            sftp::sftp_chmod,
+            sftp::sftp_chown,
+            sftp::sftp_read_text,
+            sftp::sftp_write_text,
+            sftp::sftp_du,
+            sftp::sftp_compress,
+            sftp::sftp_extract,
+            sftp::sftp_search,
+            transfer::transfer_start,
+            transfer::transfer_pack,
+            transfer::transfer_rebind,
+            transfer::transfer_release,
+            transfer::transfer_control,
+            transfer::transfer_retry,
+            transfer::transfer_list,
+            transfer::transfer_clear,
+            transfer::local_existing,
+            transfer::default_download_dir,
+            config::config_export,
+            config::config_import,
+            tunnel::tunnel_supported,
+            tunnel::tunnel_helper,
+            tunnel::tunnel_helper_set,
+            tunnel::tunnel_local,
+            tunnel::tunnel_start,
+            tunnel::tunnel_attach,
+            tunnel::tunnel_stop,
+            tunnel::tunnel_status,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

@@ -1,0 +1,104 @@
+/* 样式入口（Tailwind v4）。样式写在模板里，不扩展主题、不用任意值；此处只放模板无法覆盖的样式。 */
+@import "tailwindcss";
+
+/* 深色主题由 data-theme 决定，见 theme.ts。 */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* macOS 为红绿灯按钮让位，见 titlebar.ts。 */
+@custom-variant lights (&:where(.traffic-lights, .traffic-lights *));
+
+@layer base {
+  :root {
+    color-scheme: light;
+    /* 关闭编程连字，命令和路径须原样显示。 */
+    font-variant-ligatures: no-contextual;
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+  }
+
+  input,
+  textarea {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  ::-webkit-scrollbar {
+    @apply size-2.5;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full border-2 border-transparent bg-zinc-400/50 bg-clip-padding dark:bg-zinc-500/40;
+  }
+
+  ::-webkit-scrollbar-thumb:hover,
+  ::-webkit-scrollbar-thumb:active {
+    @apply bg-zinc-500/70 dark:bg-zinc-400/60;
+  }
+
+  ::-webkit-scrollbar-corner {
+    @apply bg-transparent;
+  }
+
+  /* 隐藏滚动条。 */
+  [data-no-scrollbar] {
+    scrollbar-width: none;
+  }
+
+  [data-no-scrollbar]::-webkit-scrollbar {
+    @apply hidden;
+  }
+}
+
+/* 毛玻璃窗口：只铺一层淡底色。写在层外以覆盖 body 的不透明底色类。 */
+html.vibrancy body {
+  @apply bg-zinc-100/25 dark:bg-zinc-950/30;
+}
+
+/* 切换主题时禁用过渡，见 theme.ts。 */
+.theme-switching,
+.theme-switching *,
+.theme-switching ::before,
+.theme-switching ::after {
+  transition: none !important;
+}
+
+/* Monaco 悬停提示：不接收指针，避免盖住按钮时闪烁（锁定的除外）；
+   宽度按内容计算，避免贴右边时折行而遮挡按钮。 */
+.workbench-hover-container:not(.locked) {
+  pointer-events: none;
+}
+
+.workbench-hover-container .monaco-hover.workbench-hover {
+  width: max-content;
+}
+
+/* 统一 xterm 和 Monaco 的滚动条样式。 */
+.xterm .xterm-scrollable-element > .scrollbar > .slider,
+.monaco-editor .monaco-scrollable-element > .scrollbar > .slider {
+  @apply rounded-full border-2 border-transparent bg-clip-padding!;
+  @apply bg-zinc-400/50! dark:bg-zinc-500/40!;
+}
+
+.xterm .xterm-scrollable-element > .scrollbar > .slider:hover,
+.xterm .xterm-scrollable-element > .scrollbar > .slider.active,
+.monaco-editor .monaco-scrollable-element > .scrollbar > .slider:hover,
+.monaco-editor .monaco-scrollable-element > .scrollbar > .slider.active {
+  @apply bg-zinc-500/70! dark:bg-zinc-400/60!;
+}
+
+/* 毛玻璃下去掉 xterm 视口自带的黑底。 */
+.vibrancy .xterm .xterm-viewport {
+  background-color: transparent !important;
+}
+
+/* 有回滚内容时终端滚动条常驻（无内容时 xterm 只加 .invisible，不受影响）。 */
+.xterm .xterm-scrollable-element > .scrollbar.vertical.invisible.fade {
+  @apply pointer-events-auto opacity-100;
+}
+
+/* 终端滚动条较宽，加大边距使滑块与别处一样细。 */
+.xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
+  @apply border-x-4 border-y-2;
+}

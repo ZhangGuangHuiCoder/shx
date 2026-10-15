@@ -1,0 +1,21 @@
+{
+  "app": {
+    "windows": [
+      {
+        "title": "Shell Xplore",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 1280,
+        "minHeight": 560,
+        "visible": false,
+        "backgroundColor": "#14161a",
+        "decorations": false
+      }
+    ]
+  },
+  "bundle": {
+    "resources": [
+      "wintun.dll"
+    ]
+  }
+}

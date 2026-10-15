@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en" class="h-full cursor-default overflow-hidden select-none">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/src/assets/logo.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shell Xplore</title>
+    <!-- 资源加载前先设好底色，避免白屏；颜色与 body 一致。macOS 毛玻璃窗口不画底色。 -->
+    <style>
+      html {
+        background: #09090b;
+      }
+
+      html[data-theme="light"] {
+        background: #f4f4f5;
+      }
+
+      html.vibrancy {
+        background: transparent;
+      }
+    </style>
+    <script>
+      if (/Macintosh|Mac OS X/.test(navigator.userAgent)) document.documentElement.classList.add("vibrancy");
+      try {
+        var theme = JSON.parse(localStorage.getItem("shx.settings") || "{}").theme;
+        if (theme === "auto") theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.dataset.theme = theme === "light" ? "light" : "dark";
+      } catch (e) {
+        // 读取失败时使用默认深色。
+      }
+    </script>
+  </head>
+
+  <body class="m-0 h-full overflow-hidden bg-zinc-100 font-sans text-sm text-zinc-800 antialiased dark:bg-zinc-950 dark:text-zinc-100">
+    <div id="app" class="h-full"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
