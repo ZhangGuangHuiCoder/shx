@@ -1,12 +1,18 @@
-// 关闭主窗口即退出应用，会断开所有会话和隧道，所以有会话或隧道时先询问。
+// 关闭主窗口不再直接退出：可选择后台运行（保留会话与隧道）或断开退出。
+// 有会话或隧道时先询问；托盘“退出”也走同一流程（事件 app:quit）。
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { TriangleAlert } from "@lucide/vue";
 import { t } from "@/shared/i18n";
-import { confirm } from "@/shared/ui";
+import { ask } from "@/shared/ui";
 import { useApp } from "@/shared/store";
-import { revealWindow } from "@/app/window";
+import { hideToBackground, revealWindow } from "@/app/window";
+
+/** 询问结果；关闭/取消为 null。 */
+type Choice = "quit" | "background";
 
 /** 进行中的询问，避免叠出多个对话框。 */
-let asking: Promise<boolean> | null = null;
+let asking: Promise<Choice | null> | null = null;
 
 const openSessionCount = () => useApp().tabs.filter((tab) => tab.status !== "closed").length;
 
@@ -17,23 +23,41 @@ export function quitConsequences(): string {
   return lines.filter(Boolean).join("\n");
 }
 
-function mayClose(): Promise<boolean> {
+/** 询问如何处置；没有会话和隧道时没什么可留，直接退出。 */
+function askQuit(): Promise<Choice | null> {
   const consequences = quitConsequences();
-  if (!consequences) return Promise.resolve(true);
+  if (!consequences) return Promise.resolve("quit");
   if (!asking) {
-    // 窗口可能已最小化，先让询问可见。
+    // 窗口可能已隐藏或最小化，先让询问可见。
     void revealWindow();
-    asking = confirm(t("app.quitTitle"), consequences, { danger: true, ok: t("app.quitOk") }).finally(() => (asking = null));
+    asking = ask<Choice>({
+      icon: TriangleAlert,
+      danger: true,
+      title: t("app.quitTitle"),
+      content: consequences,
+      actions: [
+        { value: "background", label: t("app.quitBackground"), tone: "primary" },
+        { value: "quit", label: t("app.quitOk"), tone: "danger" },
+      ],
+    }).finally(() => (asking = null));
   }
   return asking;
 }
 
 export async function installCloseGuard() {
   await getCurrentWindow().onCloseRequested(async (event) => {
-    if (!(await mayClose())) event.preventDefault();
+    const choice = await askQuit();
+    // 退出：放行默认关闭（销毁 → 结束进程）。
+    if (choice === "quit") return;
+    event.preventDefault();
+    if (choice === "background") await hideToBackground();
   });
+  // 托盘“退出”：交回统一的询问流程。
+  await listen("app:quit", () => void quit());
 }
 
 export async function quit() {
-  if (await mayClose()) await getCurrentWindow().destroy();
+  const choice = await askQuit();
+  if (choice === "quit") await getCurrentWindow().destroy();
+  else if (choice === "background") await hideToBackground();
 }

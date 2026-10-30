@@ -16,15 +16,18 @@ name = "shx_lib"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["macos-private-api"] }
-tauri-plugin-clipboard-manager = "2.4.1"
-tauri-plugin-dialog = "2.8.1"
+tauri = { version = "2", features = ["macos-private-api", "tray-icon"] }
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
-tauri-plugin-process = "2.4.0"
-tauri-plugin-updater = "2.13.3"
+tauri-plugin-process = "2"
+tauri-plugin-updater = "2"
 
 russh = { version = "0.64.1", default-features = false, features = ["flate2", "ring", "rsa"] }
 russh-sftp = "3.0.1"
+
+# 本地 shell：伪终端（Unix pty / Windows ConPTY）。
+portable-pty = "0.8"
 
 futures = "0.3.34"
 tokio = { version = "1.53.2", features = ["rt", "macros", "sync", "time", "fs", "io-util", "net", "signal"] }
@@ -60,6 +63,7 @@ getifaddrs = "0.6.2"
 windows-sys = { version = "0.61.2", features = [
     "Win32_Foundation",
     "Win32_NetworkManagement_IpHelper",
+    "Win32_System_Power",
     "Win32_System_Pipes",
     "Win32_System_Registry",
     "Win32_System_Threading",

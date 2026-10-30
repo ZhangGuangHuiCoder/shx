@@ -6,6 +6,7 @@ import { t } from "@/shared/i18n";
 import { useApp, type Tab } from "@/shared/store";
 import FileManager from "@/features/files/FileManager.vue";
 import { filePaneMinWidth } from "@/features/session/layout";
+import { isLocalSession } from "@/features/session/local";
 import TerminalPane from "@/features/session/TerminalPane.vue";
 
 const props = defineProps<{ tab: Tab; active: boolean }>();
@@ -13,6 +14,7 @@ const app = useApp();
 
 /** 面板使用的会话；断线重连期间保留旧会话，界面状态不重置。 */
 const sessionId = ref(props.tab.sessionId);
+const profile = computed(() => app.profiles.find((p) => p.id === props.tab.profileId));
 watch(
   () => props.tab.sessionId,
   (id) => {
@@ -23,6 +25,10 @@ watch(
 const terminal = ref<InstanceType<typeof TerminalPane>>();
 const files = ref<InstanceType<typeof FileManager>>();
 const root = ref<HTMLElement>();
+/** 本地 shell 无 SFTP，不显示文件管理器。 */
+const local = computed(() => isLocalSession(sessionId.value));
+/** 连接后执行的命令：远程取主机配置，本地 shell 取应用设置。 */
+const startup = computed(() => (local.value ? app.settings.localStartupCommand : profile.value?.startupCommand));
 const layout = computed(() => (app.settings.fileLayout === "right" ? "right" : "bottom"));
 /** 文件管理器占比，按布局分别记忆。 */
 const share = reactive({ bottom: 0.45, right: 0.5 });
@@ -64,16 +70,17 @@ onBeforeUnmount(() => stopDrag?.());
   <div ref="root" class="absolute inset-0 flex" :class="layout === 'right' ? 'flex-row' : 'flex-col'">
     <template v-if="sessionId">
       <div class="min-h-0 min-w-0 flex-1">
-        <TerminalPane ref="terminal" :session-id="sessionId" :keep-alive="tab.keepAlive" :active="active" @cwd="files?.terminalCwd($event)" @restarted="files?.shellRestarted()" @attached="setAttached" />
+        <TerminalPane ref="terminal" :session-id="sessionId" :keep-alive="tab.keepAlive" :startup="startup" :active="active" @cwd="files?.terminalCwd($event)" @restarted="files?.shellRestarted()" @attached="setAttached" />
       </div>
-      <!-- 隐藏而不卸载，保留状态。 -->
+      <!-- 隐藏而不卸载，保留状态。本地 shell 没有远程文件系统，直接不挂载。 -->
       <div
+        v-if="!local"
         v-show="app.settings.showFiles"
         class="shrink-0 border-zinc-900/10 bg-white/60 transition-colors duration-150 hover:bg-blue-500 dark:border-white/10 dark:bg-zinc-900/60 dark:hover:bg-blue-500"
         :class="layout === 'right' ? 'w-1 cursor-col-resize border-l' : 'h-1 cursor-row-resize border-t'"
         @mousedown="startDrag"
       />
-      <div v-show="app.settings.showFiles" class="min-h-0 min-w-0 shrink-0" :style="paneSize">
+      <div v-if="!local" v-show="app.settings.showFiles" class="min-h-0 min-w-0 shrink-0" :style="paneSize">
         <FileManager ref="files" :session-id="sessionId" :profile-id="tab.profileId" :active="active && app.settings.showFiles && tab.status === 'connected'" @send="terminal?.write($event)" />
       </div>
     </template>

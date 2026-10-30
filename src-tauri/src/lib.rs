@@ -1,11 +1,15 @@
+mod awake;
 mod config;
 mod error;
+mod hosts;
 mod i18n;
 mod keepalive;
+mod local;
 mod menu;
 mod sftp;
 mod ssh;
 mod transfer;
+mod tray;
 mod tunnel;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -15,11 +19,16 @@ pub fn run() {
     if let Some(code) = tunnel::helper::dispatch() {
         std::process::exit(code);
     }
+    // Windows：以管理员身份重启自身写 hosts 时，复制完即退出（见 hosts.rs）。
+    #[cfg(windows)]
+    if let Some(code) = hosts::dispatch() {
+        std::process::exit(code);
+    }
 
     // 必须在创建应用（及其菜单）之前执行。
     menu::disable_system_items();
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -36,6 +45,8 @@ pub fn run() {
                     }
                 });
             }
+            hosts::setup(app)?;
+            tray::build(app)?;
             Ok(())
         })
         // 主窗口销毁即退出应用。
@@ -50,6 +61,7 @@ pub fn run() {
             menu::menu_autoenable,
             ssh::ssh_connect,
             ssh::ssh_disconnect,
+            local::local_connect,
             ssh::key_import,
             ssh::agent_add_keys,
             ssh::term_open,
@@ -86,6 +98,12 @@ pub fn run() {
             transfer::default_download_dir,
             config::config_export,
             config::config_import,
+            hosts::hosts_list,
+            hosts::hosts_path,
+            hosts::hosts_read,
+            hosts::hosts_save,
+            hosts::hosts_toggle,
+            hosts::hosts_revert,
             tunnel::tunnel_supported,
             tunnel::tunnel_helper,
             tunnel::tunnel_helper_set,
@@ -95,6 +113,17 @@ pub fn run() {
             tunnel::tunnel_stop,
             tunnel::tunnel_status,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    // macOS：隐藏到后台后点击 Dock 图标（无可见窗口）恢复主窗口；退出前清理保持唤醒。
+    app.run(|app_handle, event| {
+        let _ = &app_handle;
+        match event {
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::Reopen { has_visible_windows: false, .. } => tray::reveal(&app_handle),
+            tauri::RunEvent::Exit => awake::cleanup(),
+            _ => {}
+        }
+    });
 }

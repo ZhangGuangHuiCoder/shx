@@ -65,6 +65,7 @@ function parseProfile(v: unknown): Profile | null {
     note: text(v.note),
     pinned: v.pinned === true,
     ...(v.keepAlive === true ? { keepAlive: true } : {}),
+    ...(typeof v.startupCommand === "string" && v.startupCommand.trim() ? { startupCommand: v.startupCommand } : {}),
     ...(dirs.length ? { favoriteDirs: [...new Set(dirs)] } : {}),
     ...(tunnel ? { tunnel } : {}),
     ...(typeof v.icon === "string" && v.icon ? { icon: v.icon } : {}),

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-  ChevronRight, Copy, Fingerprint, GlobeLock, GripVertical, HeartPulse, KeyRound, LockKeyhole, MessageSquareText, MoreVertical, Moon, Pencil,
+  ChevronRight, Copy, Eraser, Fingerprint, GlobeLock, GripVertical, HeartPulse, KeyRound, LockKeyhole, MessageSquareText, MoreVertical, Moon, Pencil,
   Pin, PinOff, Plus, Search, SearchX, Sun, SunMoon, TerminalSquare, Trash2,
 } from "@lucide/vue";
 import draggable from "vuedraggable";
@@ -15,9 +15,10 @@ import { contextMenu, openContextMenu, type MenuEntry } from "@/shared/contextMe
 import { t, unitGap } from "@/shared/i18n";
 import { THEME_SETTINGS } from "@/shared/theme";
 import { CUSTOM_TITLEBAR, OVERLAY_TITLEBAR } from "@/shared/titlebar";
-import { confirm } from "@/shared/ui";
+import { confirm, prompt } from "@/shared/ui";
 import { PINNED_GROUP, useApp } from "@/shared/store";
 import { openTunnelDialog } from "@/features/tunnel/tunnelDialog";
+import { isLocalTab } from "@/features/session/local";
 import { hostHue, hostTint, resolveHostIcon } from "@/features/home/hostIcons";
 import { accentText, dim, fg, glassBar, glassCard, keycap, line, okChip, plainChip, toolGroup } from "@/shared/ui-kit/styles";
 import IconPicker from "@/features/home/IconPicker.vue";
@@ -63,6 +64,20 @@ const AUTH: Record<AuthKind, { icon: Component; label: () => string }> = {
 
 /** 未知登录方式回退为密码标记。 */
 const authOf = (p: Profile) => AUTH[p.auth] ?? AUTH.password;
+
+/** 该主机的隧道运行状态；不在跑时为 null。 */
+const runOf = (profileId: string) => (app.tunnel?.profileId === profileId ? app.tunnel : null);
+/** 启停过渡中；未启动时 starting 也计入，避免重复点击。 */
+const busyOf = (profileId: string) => {
+  const run = runOf(profileId);
+  return !!run && (run.phase === "starting" || run.phase === "stopping");
+};
+
+/** 卡片上的地球标记点击切换：本机在跑就关闭，否则开启。 */
+function toggleTunnel(p: Profile) {
+  if (runOf(p.id)) void app.stopTunnel();
+  else if (!app.tunnel) void app.startTunnel(p);
+}
 
 const HELP = ["connect", "drag", "menu"] as const;
 
@@ -138,6 +153,29 @@ const sessions = computed(() => {
   return count;
 });
 const connecting = computed(() => new Set(app.connecting.map((tab) => tab.profileId)));
+
+/** 本地 shell 连接中：顶栏按钮转圈。 */
+const localConnecting = computed(() => app.connecting.some((tab) => isLocalTab(tab)));
+
+/** 右键本地按钮：设置打开本地终端后自动执行的命令。 */
+function localMenu(event: MouseEvent) {
+  const entries: MenuEntry[] = [{ label: t("local.startupMenu"), icon: TerminalSquare, action: () => void editLocalStartup() }];
+  if (app.settings.localStartupCommand.trim()) {
+    entries.push("divider", { label: t("local.startupClear"), icon: Eraser, danger: true, action: () => (app.settings.localStartupCommand = "") });
+  }
+  openContextMenu(event, entries);
+}
+
+async function editLocalStartup() {
+  const answer = await prompt({
+    title: t("local.startupTitle"),
+    detail: t("local.startupHint"),
+    icon: TerminalSquare,
+    initial: app.settings.localStartupCommand,
+    placeholder: t("common.optional"),
+  });
+  if (answer) app.settings.localStartupCommand = answer.value.trim();
+}
 
 const sessionCount = computed(() => [...sessions.value.values()].reduce((n, c) => n + c, 0));
 
@@ -218,6 +256,10 @@ function onReorder(group: ViewGroup) {
       <!-- 可拖动窗口的空白。 -->
       <span class="flex-1 self-stretch" :data-tauri-drag-region="drag" />
       <div class="flex shrink-0 items-center gap-2" :data-tauri-drag-region="drag">
+        <UiButton :loading="localConnecting" :title="t('local.openTip')" @click="app.openLocal()" @contextmenu="localMenu">
+          <template #icon><TerminalSquare :size="16" /></template>
+          {{ t("local.shell") }}
+        </UiButton>
         <UiButton type="primary" @click="edit(null)">
           <template #icon><Plus :size="16" /></template>
           {{ t("sidebar.new") }}
@@ -343,9 +385,17 @@ function onReorder(group: ViewGroup) {
                     <span v-if="element.note" :class="[chip, plainChip, 'w-5 justify-center']" :title="element.note">
                       <MessageSquareText :size="12" />
                     </span>
-                    <span v-if="app.tunnel?.profileId === element.id" :class="[chip, okChip, 'w-5 justify-center']" :title="t('tunnel.chip')">
+                    <button
+                      v-if="app.tunnelSupported"
+                      type="button"
+                      class="cursor-pointer transition-opacity hover:opacity-80 disabled:cursor-default disabled:opacity-60"
+                      :class="[chip, app.tunnel?.profileId === element.id ? okChip : plainChip, 'w-5 justify-center']"
+                      :disabled="!runOf(element.id) && (!!app.tunnel || busyOf(element.id))"
+                      :title="t(runOf(element.id) ? 'tunnel.chipOn' : busyOf(element.id) ? 'tunnel.chipBusy' : app.tunnel ? 'tunnel.chipElsewhere' : 'tunnel.chipOff')"
+                      @click.stop="toggleTunnel(element)"
+                    >
                       <GlobeLock :size="12" />
-                    </span>
+                    </button>
                     <span v-if="sessions.has(element.id)" :class="[chip, okChip, 'px-1.5']">
                       <i class="size-1.5 shrink-0 rounded-full bg-emerald-500" />{{ t("home.sessions", { count: sessions.get(element.id)! }) }}
                     </span>

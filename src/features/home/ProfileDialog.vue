@@ -26,9 +26,12 @@ const show = defineModel<boolean>("show", { required: true });
 const app = useApp();
 
 const blank = (): Profile => ({
-  id: "", name: "", group: "", host: "", port: 22, username: "root", auth: "password", keyId: null, saveSecret: true, note: "", keepAlive: false,
+  id: "", name: "", group: "", host: "", port: 22, username: "root", auth: "password", keyId: null, saveSecret: true, note: "", keepAlive: false, startupCommand: "",
 });
 const form = reactive<Profile>(blank());
+
+/** 常用名（可在设置中配置）在前，再附上已保存主机用过的用户名（去重）。 */
+const usernameSuggestions = computed(() => [...new Set([...app.settings.commonUsernames, ...app.profiles.map((p) => p.username)])]);
 
 const AUTH: { value: AuthKind; icon: Component; label: () => string }[] = [
   { value: "password", icon: LockKeyhole, label: () => t("profile.password") },
@@ -97,7 +100,7 @@ async function removeKey() {
 
 function save() {
   const host = form.host.trim();
-  app.saveProfile({ ...form, host, name: form.name.trim() || host, username: form.username.trim() }, secret.value || undefined);
+  app.saveProfile({ ...form, host, name: form.name.trim() || host, username: form.username.trim(), startupCommand: form.startupCommand?.trim() || undefined }, secret.value || undefined);
   show.value = false;
 }
 </script>
@@ -123,9 +126,9 @@ function save() {
 
       <!-- 与 ssh 写法一致：用户名 @ 主机 : 端口。 -->
       <div class="flex items-end gap-2">
-        <label class="flex w-1/4 min-w-0 flex-col gap-2">
+        <label class="flex w-1/3 min-w-0 flex-col gap-2">
           <span :class="sectionLabel">{{ t("profile.username") }}<span class="ml-1 text-red-500">*</span></span>
-          <UiInput v-model:value="form.username" />
+          <UiAutocomplete v-model:value="form.username" :options="usernameSuggestions" />
         </label>
         <span :class="[dim, 'flex h-9 items-center font-mono font-semibold']">@</span>
         <label class="flex min-w-0 flex-1 flex-col gap-2">
@@ -133,7 +136,7 @@ function save() {
           <UiInput v-model:value="form.host" :placeholder="t('profile.hostPlaceholder')" />
         </label>
         <span :class="[dim, 'flex h-9 items-center font-mono font-semibold']">:</span>
-        <label class="flex w-20 shrink-0 flex-col gap-2">
+        <label class="flex w-[4.5rem] shrink-0 flex-col gap-2">
           <span :class="sectionLabel">{{ t("profile.port") }}</span>
           <UiNumberInput v-model:value="form.port" :min="1" :max="65535" placeholder="22" />
         </label>
@@ -181,6 +184,12 @@ function save() {
         </div>
         <UiSwitch v-model:value="form.keepAlive" class="shrink-0" aria-labelledby="profile-keep-alive" />
       </div>
+
+      <label class="flex min-w-0 flex-col gap-2">
+        <span :class="sectionLabel">{{ t("profile.startup") }}</span>
+        <UiInput v-model:value="form.startupCommand" class="font-mono" :placeholder="t('common.optional')" />
+        <span :class="[dim, 'text-xs/normal']">{{ t("profile.startupHint") }}</span>
+      </label>
 
       <label class="flex min-w-0 flex-col gap-2">
         <span :class="sectionLabel">{{ t("profile.note") }}</span>

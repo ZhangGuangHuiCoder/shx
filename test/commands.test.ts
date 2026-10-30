@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BUILTIN, FORMER_TITLES, GROUPS, SEARCH_ALIASES } from "@/features/commands/builtinCommands.ts";
+import { BUILTIN, BUILTIN_WINDOWS, FORMER_TITLES, GROUPS, SEARCH_ALIASES } from "@/features/commands/builtinCommands.ts";
 import {
   commandGroups,
   commandParts,
@@ -82,6 +82,14 @@ describe("commandGroups", () => {
     expect(item?.name).toBe("Load only");
     expect(item?.command).toBe("uptime -p");
     expect(item?.group).toBe(GROUPS.system.en);
+  });
+
+  it("os 为 windows 时列出 Windows 默认命令，不含 Linux 命令", () => {
+    const groups = commandGroups([], "en", "Ungrouped", "windows");
+    const items = allItems(groups);
+    expect(items.length).toBe(BUILTIN_WINDOWS.length);
+    expect(items.some((i) => i.command === "uptime")).toBe(false);
+    expect(items.some((i) => i.command === "tasklist")).toBe(true);
   });
 });
 
@@ -229,6 +237,11 @@ describe("内置命令数据完整性", () => {
     expect(new Set(BUILTIN.map(([, command]) => command)).size).toBe(BUILTIN.length);
   });
 
+  it("Linux 与 Windows 命令合起来 id 也不重复", () => {
+    const all = [...BUILTIN, ...BUILTIN_WINDOWS].map(([, command]) => command);
+    expect(new Set(all).size).toBe(all.length);
+  });
+
   it("每行的分组键都存在，中英文标题都非空", () => {
     for (const [key, , zh, en] of BUILTIN) {
       expect(GROUPS[key]).toBeTruthy();
@@ -240,6 +253,18 @@ describe("内置命令数据完整性", () => {
   it("占位符只允许 <UPPER_CASE> 形式；其余 < 只能是 shell 重定向", () => {
     for (const [, command] of BUILTIN) {
       // 去掉占位符后，剩余的 < 必须是重定向（后跟空格）。
+      const leftovers = command.replace(/<[A-Z][A-Z0-9_]*>/g, "");
+      expect(leftovers).not.toMatch(/<[^ ]/);
+    }
+  });
+
+  it("Windows 命令同样只允许 <UPPER_CASE> 占位符，分组与标题齐备", () => {
+    for (const [key, , zh, en] of BUILTIN_WINDOWS) {
+      expect(GROUPS[key]).toBeTruthy();
+      expect(zh.trim().length).toBeGreaterThan(0);
+      expect(en.trim().length).toBeGreaterThan(0);
+    }
+    for (const [, command] of BUILTIN_WINDOWS) {
       const leftovers = command.replace(/<[A-Z][A-Z0-9_]*>/g, "");
       expect(leftovers).not.toMatch(/<[^ ]/);
     }

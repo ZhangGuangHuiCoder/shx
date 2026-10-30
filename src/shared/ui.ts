@@ -55,8 +55,9 @@ export async function ask<T extends string>(opts: {
   detail?: string;
   content?: string;
   icon?: Component;
+  danger?: boolean;
   actions: (DialogAction & { value: T })[];
 }): Promise<T | null> {
-  const result = await openApp({ icon: opts.icon ?? CircleHelp, title: opts.title, detail: opts.detail, text: opts.content, actions: opts.actions });
+  const result = await openApp({ icon: opts.icon ?? CircleHelp, title: opts.title, detail: opts.detail, text: opts.content, danger: opts.danger, actions: opts.actions });
   return result ? (result.value as T) : null;
 }

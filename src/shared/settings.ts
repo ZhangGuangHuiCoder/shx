@@ -17,6 +17,10 @@ export interface Settings {
   language: Locale;
   /** 收藏的命令 id，按收藏先后排列。 */
   favoriteCommands: string[];
+  /** 新建主机时提示的常用登录用户名，可自由增删。 */
+  commonUsernames: string[];
+  /** 打开本地终端后自动执行的一条命令，空则不执行。 */
+  localStartupCommand: string;
   theme: "dark" | "light" | "auto";
   font: "builtin" | "system";
   /** 自定义快捷键：动作 id → accelerator，只存改过的项。 */
@@ -27,6 +31,9 @@ export const FONT_MIN = 9;
 export const FONT_MAX = 28;
 export const stepFont = (size: number, delta: number) => Math.min(FONT_MAX, Math.max(FONT_MIN, size + delta));
 export const FONT_DEFAULT = 13;
+
+/** 最常用的登录用户名默认列表，用户可在设置中增删。 */
+export const DEFAULT_COMMON_USERNAMES = ["root", "admin", "administrator", "ubuntu", "debian"];
 
 /** 默认用编辑器打开的文本文件规则（写法见 util.ts 的 ruleMatcher）。常为二进制的扩展名（.out、.key、.bak）不收录。 */
 export const DEFAULT_EDIT_RULES = [
@@ -76,6 +83,8 @@ export function defaultSettings(): Settings {
     editorWordWrap: false,
     editorWhitespace: false,
     favoriteCommands: [],
+    commonUsernames: [...DEFAULT_COMMON_USERNAMES],
+    localStartupCommand: "",
     language: systemLocale(),
     theme: "dark",
     font: "builtin",

@@ -423,3 +423,116 @@ export const BUILTIN: [group: GroupKey, command: string, zh: string, en: string]
   ["git", "git remote -v", "远程仓库地址", "Remote URLs"],
   ["git", "git clone <URL>", "克隆仓库", "Clone a repository"],
 ];
+
+// Windows 内置命令：面向默认登录的 cmd（Windows 主机连上后通常落在 cmd.exe），收录原则与上面相同。
+// 不与 BUILTIN 复用命令文本（保证 id 唯一）；需要图形界面的不收录。
+export const BUILTIN_WINDOWS: [group: GroupKey, command: string, zh: string, en: string][] = [
+  // ---- 系统 ----
+  ["system", "ver", "Windows 版本", "Windows version"],
+  ["system", "systeminfo", "系统概况", "System summary"],
+  ["system", "hostname", "计算机名", "Computer name"],
+  ["system", "driverquery", "已安装的驱动", "Installed drivers"],
+  ["system", "tzutil /g", "当前时区", "Current time zone"],
+  ["system", "w32tm /query /status", "时间同步状态", "Time sync status"],
+  ["system", "set", "环境变量", "Environment variables"],
+  ["system", "date /t & time /t", "当前日期与时间", "Current date and time"],
+
+  // ---- 进程 ----
+  ["process", "tasklist", "进程列表", "Process list"],
+  ["process", "tasklist /v", "进程的详细列表", "Processes in detail"],
+  ["process", "tasklist /svc", "各进程承载的服务", "Services hosted by each process"],
+  ["process", "tasklist /fi \"imagename eq <NAME>\"", "按名称查找进程", "Find a process by name"],
+  ["process", "taskkill /PID <PID>", "结束进程", "Stop a process"],
+  ["process", "taskkill /PID <PID> /F", "强制结束进程", "Force a process to stop"],
+  ["process", "taskkill /IM <NAME> /F", "按名称结束进程", "Stop processes by name"],
+
+  // ---- 磁盘 ----
+  ["disk", "fsutil fsinfo drives", "已挂载的驱动器", "Mounted drives"],
+  ["disk", "fsutil volume diskfree <DRIVE>", "卷剩余空间（如 C:）", "Free space on a volume (such as C:)"],
+  ["disk", "mountvol", "卷与挂载点", "Volumes and mount points"],
+  ["disk", "chkdsk <DRIVE> /scan", "在线检查磁盘（如 C:）", "Scan a volume for errors (such as C:)"],
+
+  // ---- 文件 ----
+  ["files", "dir", "当前目录内容", "Items in this folder"],
+  ["files", "dir /a", "当前目录内容（含隐藏）", "Items in this folder, including hidden"],
+  ["files", "dir /o-d", "按修改时间排序", "Sorted by modification time"],
+  ["files", "dir /s /b <PATTERN>", "递归查找文件", "Find files recursively"],
+  ["files", "where <PATTERN>", "在 PATH 中查找", "Find in PATH"],
+  ["files", "fc <FILE1> <FILE2>", "比较两个文件", "Compare two files"],
+  ["files", "certutil -hashfile <FILE> MD5", "MD5 校验值", "MD5 checksum"],
+  ["files", "certutil -hashfile <FILE> SHA256", "SHA-256 校验值", "SHA-256 checksum"],
+  ["files", "copy <SOURCE> <DEST>", "复制文件", "Copy a file"],
+  ["files", "mklink /D <LINK> <TARGET>", "创建目录符号链接", "Create a directory symlink"],
+  ["files", "tar -a -cf <NAME>.zip <ITEM>", "压缩为 zip", "Compress into a zip"],
+  ["files", "tar -xf <FILE>.zip -C <DIR>", "解压 zip 到指定目录", "Extract a zip into a folder"],
+
+  // ---- 文本 ----
+  ["text", "findstr \"<TEXT>\" <FILE>", "在文件中搜索", "Search a file"],
+  ["text", "findstr /s /i \"<TEXT>\" *", "在当前目录中搜索文本", "Search for text in this folder"],
+  ["text", "findstr /l /i \"<TEXT>\" <FILE>", "按字面量搜索（忽略大小写）", "Search literally, ignoring case"],
+  ["text", "findstr /n \"<TEXT>\" <FILE>", "搜索并显示行号", "Search and show line numbers"],
+  ["text", "type <FILE>", "查看文件内容", "Print a file"],
+  ["text", "type <FILE> | more", "分页查看文件", "Page through a file"],
+  ["text", "type <FILE> | sort", "按行排序", "Sort the lines"],
+
+  // ---- 网络 ----
+  ["network", "ipconfig /all", "完整的网卡与 DNS 配置", "Full adapter and DNS configuration"],
+  ["network", "route print", "路由表", "Routing table"],
+  ["network", "arp -a", "ARP 缓存", "ARP cache"],
+  ["network", "getmac", "各网卡 MAC 地址", "MAC address per adapter"],
+  ["network", "netsh interface show interface", "网络接口状态", "Interface states"],
+  ["network", "netstat -ano", "连接与监听端口及进程", "Connections and ports with their processes"],
+  ["network", "netstat -ano | findstr LISTENING", "正在监听的端口", "Listening ports"],
+  ["network", "netstat -ano | findstr :<PORT>", "指定端口的连接", "Connections on a port"],
+  ["network", "ping -n 4 <HOST>", "测试连通性", "Test reachability"],
+  ["network", "tracert <HOST>", "路由追踪", "Trace the route"],
+  ["network", "pathping <HOST>", "逐跳丢包与延迟", "Per-hop loss and latency"],
+  ["network", "nslookup <DOMAIN>", "DNS 解析", "DNS lookup"],
+  ["network", "curl.exe -I <URL>", "HTTP 响应头", "Show HTTP response headers"],
+  ["network", "curl.exe -s ifconfig.me", "公网 IP", "Show the public IP"],
+
+  // ---- 服务 ----
+  ["service", "sc query <SERVICE>", "服务状态", "Service status"],
+  ["service", "sc query type= service state= all", "所有服务及其状态", "All services and their states"],
+  ["service", "net start", "已启动的服务", "Running services"],
+  ["service", "net start <SERVICE>", "启动服务", "Start a service"],
+  ["service", "net stop <SERVICE>", "停止服务", "Stop a service"],
+  ["service", "sc config <SERVICE> start= auto", "设为开机启动", "Set a service to start automatically"],
+  ["service", "sc qc <SERVICE>", "服务的配置信息", "A service's configuration"],
+  ["service", "schtasks /query /fo LIST /v", "计划任务详情", "Scheduled tasks in detail"],
+
+  // ---- 用户 ----
+  ["users", "whoami", "当前用户", "Current user"],
+  ["users", "whoami /groups", "当前用户所属组", "Groups of the current user"],
+  ["users", "whoami /priv", "当前用户的权限", "Privileges of the current user"],
+  ["users", "net user", "本地用户列表", "Local users"],
+  ["users", "net user <USER>", "用户详情", "User details"],
+  ["users", "net localgroup", "本地组", "Local groups"],
+  ["users", "net localgroup <GROUP>", "组成员", "Members of a group"],
+  ["users", "net localgroup <GROUP> <USER> /add", "将用户加入组", "Add a user to a group"],
+  ["users", "net localgroup administrators", "管理员组成员", "Members of Administrators"],
+
+  // ---- 安全 ----
+  ["security", "netsh advfirewall show allprofiles", "各配置文件的防火墙状态", "Firewall state per profile"],
+  ["security", "netsh advfirewall firewall show rule name=all", "全部防火墙规则", "All firewall rules"],
+  ["security", "netsh advfirewall firewall add rule name='<NAME>' dir=in action=allow protocol=TCP localport=<PORT>", "放行入站端口", "Allow an inbound port"],
+  ["security", "netsh advfirewall firewall delete rule name='<NAME>'", "按名称删除防火墙规则", "Delete a firewall rule by name"],
+  ["security", "sc query windefend", "Defender 服务状态", "Defender service status"],
+  ["security", "auditpol /get /category:*", "审计策略", "Audit policy"],
+  ["security", "net accounts", "密码与锁定策略", "Password and lockout policy"],
+
+  // ---- 软件 ----
+  ["package", "winget list", "已安装的软件（winget）", "Installed apps (winget)"],
+  ["package", "winget search <KEYWORD>", "搜索软件（winget）", "Search apps (winget)"],
+  ["package", "winget install <PACKAGE>", "安装软件（winget）", "Install an app (winget)"],
+  ["package", "winget upgrade --all", "升级全部软件（winget）", "Upgrade all apps (winget)"],
+  ["package", "choco list --local-only", "已安装的软件（Chocolatey）", "Installed packages (Chocolatey)"],
+  ["package", "choco install <PACKAGE>", "安装软件（Chocolatey）", "Install a package (Chocolatey)"],
+  ["package", "scoop list", "已安装的软件（Scoop）", "Installed apps (Scoop)"],
+  ["package", "dotnet --info", ".NET 运行时与 SDK", ".NET runtimes and SDKs"],
+
+  // ---- Web ----
+  ["web", "C:\\Windows\\System32\\inetsrv\\appcmd.exe list site", "IIS 站点", "IIS sites"],
+  ["web", "C:\\Windows\\System32\\inetsrv\\appcmd.exe list apppool", "IIS 应用程序池", "IIS application pools"],
+  ["web", "certutil -store My", "当前用户的个人证书", "Certificates in the user personal store"],
+];

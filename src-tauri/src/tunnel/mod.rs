@@ -236,11 +236,12 @@ struct Active {
 }
 
 /// 同一时刻至多一条隧道。
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Manager {
-    active: Mutex<Option<Active>>,
+    // Arc 包一层，让 AppState 可以克隆给工作线程。
+    active: Arc<Mutex<Option<Active>>>,
     /// 启动中，禁止再次启动。
-    starting: AtomicBool,
+    starting: Arc<AtomicBool>,
 }
 
 struct Starting<'a>(&'a AtomicBool);

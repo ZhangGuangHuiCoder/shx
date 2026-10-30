@@ -254,14 +254,21 @@ fn source_name(direction: Direction, source: &str) -> String {
 }
 
 pub struct Manager {
-    tasks: Mutex<Vec<Arc<Task>>>,
+    // Arc 包一层，让 AppState 可以克隆给工作线程。
+    tasks: Arc<Mutex<Vec<Arc<Task>>>>,
     permits: Arc<Semaphore>,
+}
+
+impl Clone for Manager {
+    fn clone(&self) -> Self {
+        Self { tasks: self.tasks.clone(), permits: self.permits.clone() }
+    }
 }
 
 impl Default for Manager {
     fn default() -> Self {
         Self {
-            tasks: Mutex::new(Vec::new()),
+            tasks: Arc::new(Mutex::new(Vec::new())),
             permits: Arc::new(Semaphore::new(MAX_CONCURRENT)),
         }
     }

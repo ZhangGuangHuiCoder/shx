@@ -28,6 +28,7 @@ const model = computed<number | undefined>({
     :min="min"
     :max="max"
     :disabled="disabled"
+    :format-options="{ useGrouping: false }"
     :class="[field, fieldMd, disabled && 'cursor-not-allowed opacity-50']"
   >
     <NumberFieldInput :class="[fieldInput, 'tabular-nums']" :placeholder="placeholder" />

@@ -4,6 +4,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { shallowRef, watch } from "vue";
 import { exportBackup, importBackup } from "@/features/backup/backup";
 import { openAssistant } from "@/features/commands/commandAssistant";
+import { openUsernamesDialog } from "@/features/home/usernamesDialog";
+import { openHostsDialog } from "@/features/hosts/hostsDialog";
 import { openRulesDialog } from "@/features/rules/rulesDialog";
 import { openShortcutsDialog } from "@/features/shortcuts/shortcutsDialog";
 import { api } from "@/shared/api";
@@ -162,6 +164,8 @@ export function appMenu(): TopMenu[] {
       { type: "item", label: t("menu.shortcuts"), action: openShortcutsDialog },
       SEPARATOR,
       { type: "item", label: t("menu.editRules"), action: openRulesDialog },
+      { type: "item", label: t("menu.commonUsernames"), action: openUsernamesDialog },
+      { type: "item", label: t("menu.hosts"), action: openHostsDialog },
       { type: "submenu", label: t("settings.otherDoubleClick"), items: choices("otherDoubleClick", DOUBLE_CLICK.map(([value, label]) => [value, t(label)])) },
     ],
   };

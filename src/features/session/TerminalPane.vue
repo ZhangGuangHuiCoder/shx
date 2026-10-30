@@ -23,7 +23,7 @@ import { terminalSurface, terminalTheme } from "@/features/session/terminalTheme
 import { VIBRANCY } from "@/shared/titlebar";
 import { fg, glassPop } from "@/shared/ui-kit/styles";
 
-const props = defineProps<{ sessionId: string; /** 保活时的 tmux 会话名。 */ keepAlive: string | null; active: boolean }>();
+const props = defineProps<{ sessionId: string; /** 保活时的 tmux 会话名。 */ keepAlive: string | null; /** 连接成功后自动执行的一条命令。 */ startup?: string | null; active: boolean }>();
 const emit = defineEmits<{ cwd: [path: string]; /** 重连后为新 shell。 */ restarted: []; /** 是否运行在保活会话中。 */ attached: [on: boolean] }>();
 const app = useApp();
 
@@ -114,7 +114,13 @@ async function openShell(): Promise<"fresh" | "resumed" | "failed"> {
       kept ? props.keepAlive : null,
     );
     emit("attached", !!kept);
-    return kept && !kept.fresh ? "resumed" : "fresh";
+    const result = kept && !kept.fresh ? "resumed" : "fresh";
+    // 新 shell（首次连接或重连）才执行连接后命令；恢复的 tmux 会话不注入。
+    if (result === "fresh") {
+      const command = props.startup?.trim();
+      if (command) write(`${command}\r`);
+    }
+    return result;
   } catch (e) {
     if (id !== props.sessionId) return "failed";
     emit("attached", false);

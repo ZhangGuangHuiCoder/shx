@@ -174,6 +174,14 @@ watch(config, (current) => {
 function start() {
   if (profile.value && valid.value) void app.startTunnel(profile.value);
 }
+
+// 开启成功后自动关窗；失败或取消则留在窗内处理。
+watch(
+  () => run.value?.phase,
+  (phase) => {
+    if (phase === "running") tunnelDialog.open = false;
+  },
+);
 </script>
 
 <template>

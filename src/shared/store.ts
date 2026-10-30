@@ -7,11 +7,12 @@ import { parseCustomCommand, removeCommand, restoreDefaults, toggleFavorite, typ
 import { planSession, slotOf } from "@/features/session/keepAlive";
 import { FILE_TREE_DEFAULT_WIDTH } from "@/features/session/layout";
 import { chooseSession } from "@/features/session/sessionChooser";
+import { isLocalSession, isLocalTab, LOCAL_PROFILE_ID } from "@/features/session/local";
 import { defaultTunnelConfig, parseTunnelConfig, rate, tunnelRequest } from "@/features/tunnel/tunnel";
 import { api, errorMessage, type AppError, type ConnectAuth, type Profile, type StoredKey, type Transfer, type TunnelConfig, type TunnelStatus } from "@/shared/api";
 import { applyFont, isFontSetting } from "@/shared/fonts";
 import { isLocale, locale, systemLocale, t } from "@/shared/i18n";
-import { DEFAULT_EDIT_RULES, defaultSettings, readStored, STORAGE, type Settings } from "@/shared/settings";
+import { DEFAULT_COMMON_USERNAMES, DEFAULT_EDIT_RULES, defaultSettings, readStored, STORAGE, type Settings } from "@/shared/settings";
 import { applyTheme, isThemeSetting } from "@/shared/theme";
 import { ask, confirm, message, prompt } from "@/shared/ui";
 
@@ -174,6 +175,10 @@ export const useApp = defineStore("app", () => {
 
   function resetEditRules() {
     settings.editRules = [...DEFAULT_EDIT_RULES];
+  }
+
+  function resetCommonUsernames() {
+    settings.commonUsernames = [...DEFAULT_COMMON_USERNAMES];
   }
 
   async function init() {
@@ -379,14 +384,26 @@ export const useApp = defineStore("app", () => {
 
   /** 连接标签页，失败原因写入 tab.error。 */
   async function connectTab(tab: Tab): Promise<"connected" | "cancelled" | "failed"> {
+    tab.status = "connecting";
+    tab.error = null;
+    // 本地 shell 无需主机与凭据，直接建立伪终端会话。
+    if (isLocalTab(tab)) {
+      try {
+        tab.sessionId = await api.localConnect();
+        tab.status = "connected";
+        return "connected";
+      } catch (e) {
+        tab.error = errorMessage(e);
+        tab.status = "closed";
+        return "failed";
+      }
+    }
     const profile = profiles.value.find((p) => p.id === tab.profileId);
     if (!profile) {
       // 配置已被删除。
       tab.status = "closed";
       return "cancelled";
     }
-    tab.status = "connecting";
-    tab.error = null;
     const result = await connectProfile(profile);
     if (result.outcome === "connected") {
       tab.sessionId = result.sessionId;
@@ -464,6 +481,32 @@ export const useApp = defineStore("app", () => {
     activeKey.value = null;
   }
 
+  /** 打开一个本地 shell 标签页；允许多个并发，不与主机去重。 */
+  async function openLocal() {
+    const tab: Tab = reactive({
+      key: crypto.randomUUID(),
+      profileId: LOCAL_PROFILE_ID,
+      title: t("local.shell"),
+      sessionId: null,
+      status: "connecting",
+      error: null,
+      keepAlive: null,
+      attached: false,
+    });
+    connecting.value.push(tab);
+    const outcome = await connectTab(tab).catch((e) => {
+      tab.error = errorMessage(e);
+      return "failed" as const;
+    });
+    connecting.value = connecting.value.filter((x) => x !== tab);
+    if (outcome === "connected") {
+      tabs.value.push(tab);
+      activeKey.value = tab.key;
+    } else if (outcome === "failed") {
+      message.error(t("conn.failed", { name: tab.title, error: tab.error ?? "" }), { duration: 10000, closable: true });
+    }
+  }
+
   async function reconnect(tab: Tab) {
     // 防止重复重连。
     if (tab.status === "connecting") return;
@@ -479,8 +522,8 @@ export const useApp = defineStore("app", () => {
     if (!newId) return;
     // 连接期间标签已关闭，断开新连接。
     if (!tabs.value.some((t) => t.key === tab.key)) return void api.disconnect(newId).catch(() => {});
-    // 中断的传输移交给新连接，可续传。
-    if (oldId) await api.transferRebind(oldId, newId).catch(() => {});
+    // 中断的传输移交给新连接，可续传（本地会话无传输）。
+    if (oldId && !isLocalSession(newId)) await api.transferRebind(oldId, newId).catch(() => {});
   }
 
   /** 正在询问中的标签页，避免重复询问。 */
@@ -520,7 +563,7 @@ export const useApp = defineStore("app", () => {
     if (end && tab.keepAlive) {
       await api.keepAliveEnd(tab.sessionId, tab.keepAlive).catch((e) => message.error(errorMessage(e)));
     }
-    await api.transferRelease(tab.sessionId).catch(() => {});
+    if (!isLocalSession(tab.sessionId)) await api.transferRelease(tab.sessionId).catch(() => {});
     await api.disconnect(tab.sessionId).catch(() => {});
   }
 
@@ -665,7 +708,7 @@ export const useApp = defineStore("app", () => {
   return {
     profiles, keys, commands, saveCommand, deleteCommand, restoreCommands, tabs, tabLabel, connecting, activeKey, transfers, settings, sidebar, fileTree,
     init, saveProfile, deleteProfile, duplicateProfile, togglePinned, toggleKeepAlive, toggleFavoriteDir, toggleGroupCollapsed, reorderProfiles,
-    importKey, deleteKey, importConfig, openTab, goHome, reconnect, closeTab, clearTransfers, resetEditRules,
+    importKey, deleteKey, importConfig, openTab, openLocal, goHome, reconnect, closeTab, clearTransfers, resetEditRules, resetCommonUsernames,
     tunnelSupported, tunnel, saveTunnelConfig, startTunnel, stopTunnel,
   };
 });

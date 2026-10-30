@@ -1,5 +1,6 @@
 // 命令目录：默认命令与用户命令合并，均可修改和删除（纯函数）。
-import { BUILTIN, FORMER_TITLES, GROUPS, SEARCH_ALIASES, type GroupKey, type Text } from "@/features/commands/builtinCommands.ts";
+import { BUILTIN, BUILTIN_WINDOWS, FORMER_TITLES, GROUPS, SEARCH_ALIASES, type GroupKey, type Text } from "@/features/commands/builtinCommands.ts";
+import type { HostOs } from "@/shared/api.ts";
 
 /** 用户新建的命令，或对默认命令的修改（id 与默认命令相同）。 */
 export interface CustomCommand {
@@ -33,7 +34,8 @@ type Lang = keyof Text;
 
 const GROUP_KEYS = Object.keys(GROUPS) as GroupKey[];
 const builtinId = (command: string) => `builtin:${command}`;
-const BUILTIN_IDS = new Set(BUILTIN.map(([, command]) => builtinId(command)));
+// Linux 与 Windows 两套默认命令都算默认项，用户修改或删除任一条都要留下存档。
+const BUILTIN_IDS = new Set([...BUILTIN, ...BUILTIN_WINDOWS].map(([, command]) => builtinId(command)));
 
 /** 标题 → 分组键；默认分组的各语言标题及旧标题都归到同一分组。 */
 export function groupKey(title: string): string {
@@ -44,8 +46,8 @@ export function groupKey(title: string): string {
   return Object.keys(FORMER_TITLES).includes(name) ? FORMER_TITLES[name] : `custom:${title.trim()}`;
 }
 
-/** 按分组归类全部命令。排序：未分组 → 用户分组（按出现顺序）→ 默认分组。 */
-export function commandGroups(saved: CustomCommand[], lang: Lang, ungrouped: string): CommandGroup[] {
+/** 按分组归类全部命令。os 决定用哪套默认命令；用户命令两套都显示。排序：未分组 → 用户分组（按出现顺序）→ 默认分组。 */
+export function commandGroups(saved: CustomCommand[], lang: Lang, ungrouped: string, os: HostOs = "linux"): CommandGroup[] {
   const byId = new Map(saved.map((c) => [c.id, c]));
   const titleOf = (key: string, typed: string) => (key === UNGROUPED ? ungrouped : key in GROUPS ? GROUPS[key as GroupKey][lang] : typed.trim());
   const groups = new Map<string, CommandGroup>();
@@ -56,7 +58,7 @@ export function commandGroups(saved: CustomCommand[], lang: Lang, ungrouped: str
     groups.set(key, group);
   };
 
-  for (const [key, command, zh, en] of BUILTIN) {
+  for (const [key, command, zh, en] of os === "windows" ? BUILTIN_WINDOWS : BUILTIN) {
     const mine = byId.get(builtinId(command));
     if (mine?.deleted) continue;
     if (mine) add(mine.id, mine.name, mine.command, mine.group);

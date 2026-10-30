@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { Plus, X } from "@lucide/vue";
+import { listen } from "@tauri-apps/api/event";
 import { onMounted, watchEffect } from "vue";
 import CommandAssistant from "@/features/commands/CommandAssistant.vue";
 import HomePage from "@/features/home/HomePage.vue";
+import UsernamesDialog from "@/features/home/UsernamesDialog.vue";
+import HostsDialog from "@/features/hosts/HostsDialog.vue";
+import { openHostsDialog } from "@/features/hosts/hostsDialog";
 import RulesDialog from "@/features/rules/RulesDialog.vue";
 import { windowMinWidth } from "@/features/session/layout";
 import SessionView from "@/features/session/SessionView.vue";
@@ -43,6 +47,8 @@ onMounted(() => {
   app.init().catch((e) => message.error(errorMessage(e)));
   installCloseGuard().catch((e) => message.error(errorMessage(e)));
   installMenu().catch((e) => message.error(t("app.menuFailed", { error: errorMessage(e) })));
+  // 托盘“编辑 Hosts…”：开对话框。
+  void listen("hosts:edit", () => openHostsDialog());
   checkForUpdatesOnLaunch();
 });
 </script>
@@ -92,6 +98,8 @@ onMounted(() => {
     <Toaster />
     <CommandAssistant />
     <RulesDialog />
+    <UsernamesDialog />
+    <HostsDialog />
     <ShortcutsDialog />
     <TunnelDialog />
   </div>

@@ -2,6 +2,9 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 
 export type AuthKind = "password" | "key" | "agent";
 
+/** 主机操作系统；决定命令助手展示哪套内置命令。默认视为 linux。 */
+export type HostOs = "linux" | "windows";
+
 /** 连接配置；密码和口令另行存放。 */
 export interface Profile {
   id: string;
@@ -21,6 +24,8 @@ export interface Profile {
   color?: number;
   /** 终端运行在服务器 tmux 中，断线后 shell 仍存活。 */
   keepAlive?: boolean;
+  /** 连接成功后自动在终端执行的一条命令。 */
+  startupCommand?: string;
   /** 收藏的远程目录，按收藏先后排列。 */
   favoriteDirs?: string[];
   /** 作为隧道出口时的设置。 */
@@ -89,6 +94,14 @@ export interface StoredKey {
   name: string;
   content: string;
   encrypted: boolean;
+}
+
+/** 一个 hosts 方案；lines 为正文，每行 “IP 域名” 或注释，不含方案名标题。 */
+export interface HostScheme {
+  id: string;
+  name: string;
+  enabled: boolean;
+  lines: string;
 }
 
 export type ConnectAuth =
@@ -176,6 +189,8 @@ export const api = {
   keyImport: (source: { path?: string; content?: string; name?: string }) =>
     invoke<Omit<StoredKey, "id">>("key_import", source),
   disconnect: (id: string) => invoke<void>("ssh_disconnect", { id }),
+  /** 建立本地 shell 会话，返回 `local:` 开头的会话 id；shell 由 termOpen 启动。 */
+  localConnect: () => invoke<string>("local_connect"),
   /** 调用 ssh-add 加载默认私钥（本程序不读私钥文件），返回 agent 中的密钥数。 */
   agentAddKeys: () => invoke<number>("agent_add_keys"),
   /** 启动 shell；指定 keepAlive 时接入同名 tmux 会话。 */
@@ -234,6 +249,18 @@ export const api = {
   /** 导出文件仅所有者可读。 */
   configExport: (path: string, content: string) => invoke<void>("config_export", { path, content }),
   configImport: (path: string) => invoke<string>("config_import", { path }),
+
+  /** 系统 hosts 文件路径（仅展示）。 */
+  hostsPath: () => invoke<string>("hosts_path"),
+  /** 当前系统 hosts 内容（“查看”用）。 */
+  hostsRead: () => invoke<string>("hosts_read"),
+  hostsList: () => invoke<HostScheme[]>("hosts_list"),
+  /** 保存整套方案并写回系统 hosts（需提权，拒绝时以 cancelled 失败）。 */
+  hostsSave: (schemes: HostScheme[]) => invoke<void>("hosts_save", { schemes }),
+  /** 切换单个方案启用态并重新写入。 */
+  hostsToggle: (id: string) => invoke<void>("hosts_toggle", { id }),
+  /** 从系统 hosts 移除托管块（不改方案）。 */
+  hostsRevert: () => invoke<void>("hosts_revert"),
 
   tunnelSupported: () => invoke<boolean>("tunnel_supported"),
   /** 不需要助手的系统返回 null。 */

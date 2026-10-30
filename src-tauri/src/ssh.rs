@@ -16,6 +16,7 @@ use tokio::sync::{mpsc, OnceCell};
 
 use crate::error::{AppError, Result};
 use crate::i18n::tr;
+use crate::local::{self, TermCmd};
 use crate::transfer;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
@@ -303,11 +304,6 @@ pub fn sh_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', r"'\''"))
 }
 
-enum TermCmd {
-    Write(Vec<u8>),
-    Resize(u32, u32),
-}
-
 /// uid/gid → 名称，从远程 /etc/passwd、/etc/group 读取一次。
 #[derive(Default)]
 pub struct Names {
@@ -369,9 +365,10 @@ impl Session {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct AppState {
-    sessions: RwLock<HashMap<String, Arc<Session>>>,
+    sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
+    pub locals: local::Locals,
     pub transfers: transfer::Manager,
     pub tunnel: crate::tunnel::Manager,
 }
@@ -387,8 +384,8 @@ impl AppState {
 }
 
 #[derive(Clone, Serialize)]
-struct SessionClosed {
-    id: String,
+pub struct SessionClosed {
+    pub id: String,
 }
 
 #[derive(Deserialize)]
@@ -458,7 +455,12 @@ pub fn key_import(name: Option<String>, path: Option<String>, content: Option<St
 }
 
 #[tauri::command]
-pub async fn ssh_disconnect(state: State<'_, AppState>, id: String) -> Result<()> {
+pub async fn ssh_disconnect(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<()> {
+    // 本地会话由 local 模块自行收尾（结束 shell、发 session-closed）。
+    if local::is_local(&id) {
+        local::disconnect(&app, &state.locals, &id);
+        return Ok(());
+    }
     let session = state.sessions.write().remove(&id);
     if let Some(session) = session {
         session.term.lock().take();
@@ -470,7 +472,7 @@ pub async fn ssh_disconnect(state: State<'_, AppState>, id: String) -> Result<()
     Ok(())
 }
 
-/// 启动 shell（指定 keep_alive 时接入 tmux 会话）。输出经 on_data 发送，结束时触发 `session-closed`。
+/// 启动 shell（本地会话开伪终端；指定 keep_alive 时接入 tmux 会话）。输出经 on_data 发送，结束时触发 `session-closed`。
 #[tauri::command]
 pub async fn term_open(
     app: AppHandle,
@@ -481,6 +483,9 @@ pub async fn term_open(
     on_data: Channel<InvokeResponseBody>,
     keep_alive: Option<String>,
 ) -> Result<()> {
+    if local::is_local(&id) {
+        return local::open(&app, &state.locals, &id, cols, rows, on_data);
+    }
     let session = state.session(&id)?;
     let attach = keep_alive.as_deref().map(crate::keepalive::attach_command).transpose()?;
     let mut channel = session.handle.channel_open_session().await?;
@@ -537,7 +542,11 @@ pub async fn term_open(
     Ok(())
 }
 
+/// 终端命令按会话 id 分别送到远程通道或本地伪终端。
 fn term_send(state: &AppState, id: &str, cmd: TermCmd) -> Result<()> {
+    if local::is_local(id) {
+        return local::send(&state.locals, id, cmd);
+    }
     let session = state.session(id)?;
     let term = session.term.lock();
     term.as_ref()

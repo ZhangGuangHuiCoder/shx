@@ -5,6 +5,7 @@ import { ListboxContent, ListboxFilter, ListboxItem, ListboxRoot, ListboxVirtual
 import { computed, nextTick, ref, watch } from "vue";
 import UiButton from "@/shared/ui-kit/UiButton.vue";
 import UiModal from "@/shared/ui-kit/UiModal.vue";
+import SegmentedControl from "@/shared/ui-kit/SegmentedControl.vue";
 import DialogHeader from "@/shared/ui-kit/DialogHeader.vue";
 import IconButton from "@/shared/ui-kit/IconButton.vue";
 import { shortcut } from "@/shared/contextMenu";
@@ -21,6 +22,7 @@ import {
   type CommandGroup, type CommandItem, type CustomCommand,
 } from "@/features/commands/commands";
 import { ALL, groupIcon } from "@/features/commands/groupIcons";
+import type { HostOs } from "@/shared/api";
 import { dim, fg, keycap, line, well } from "@/shared/ui-kit/styles";
 
 // 须与模板中的行高一致，虚拟列表据此排版。
@@ -44,7 +46,7 @@ const filter = ref<InstanceType<typeof ListboxFilter>>();
 const editor = ref<InstanceType<typeof CommandEditor>>();
 const scrollTop = ref(0);
 
-const all = computed(() => commandGroups(app.commands, locale.value, t("cmd.ungrouped")));
+const all = computed(() => commandGroups(app.commands, locale.value, t("cmd.ungrouped"), assistant.os));
 const total = computed(() => all.value.reduce((n, group) => n + group.items.length, 0));
 const words = computed(() => searchWords(query.value));
 const matching = computed(() => filterGroups(all.value, query.value));
@@ -90,6 +92,12 @@ const fillOnly = computed(() => !!activeItem.value && hasPlaceholder(activeItem.
 const titles = computed(() => all.value.filter((group) => group.key !== UNGROUPED).map((group) => group.title));
 const changed = computed(() => defaultsChanged(app.commands));
 
+// Linux / Windows 为专有名词，不随语言变化，直接用字面量。
+const osOptions = computed<{ value: HostOs; label: string }[]>(() => [
+  { value: "linux", label: "Linux" },
+  { value: "windows", label: "Windows" },
+]);
+
 const scroller = () => content.value?.$el as HTMLElement | undefined;
 const focusSearch = () => (filter.value?.$el as HTMLInputElement | undefined)?.focus();
 
@@ -115,6 +123,8 @@ watch(() => assistant.open, (open) => {
 });
 // 换组或搜索后高亮首条；不用 highlightFirstItem：虚拟行复用节点时会取错。
 watch([query, current], () => nextTick(() => highlightRow(first.value)));
+// 切换系统后回到“全部”，新命令集下原来的分组未必存在。
+watch(() => assistant.os, () => (selected.value = ALL));
 
 function close() {
   assistant.open = false;
@@ -239,6 +249,7 @@ function onKey(e: KeyboardEvent) {
           @highlight="(e) => (active = (e?.value as Row | undefined)?.key ?? null)"
         >
           <DialogHeader :icon="SquareTerminal" :title="t('cmd.assistant')" :detail="t('cmd.summary', { count: total, groups: all.length })" class="py-4 pr-4 pl-5">
+            <SegmentedControl v-model="assistant.os" :options="osOptions" size="small" :label="t('cmd.assistant')" class="shrink-0" />
             <label
               :class="[dim, 'flex h-9 min-w-0 flex-1 cursor-text items-center gap-2 rounded-xl border border-transparent bg-zinc-900/5 pr-2 pl-3 transition duration-150 focus-within:border-blue-500/50 focus-within:bg-white/80 focus-within:text-blue-500 focus-within:ring-3 focus-within:ring-blue-500/15 dark:bg-white/5 dark:focus-within:bg-white/10']"
             >
