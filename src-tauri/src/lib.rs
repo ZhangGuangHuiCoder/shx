@@ -5,6 +5,7 @@ mod hosts;
 mod i18n;
 mod keepalive;
 mod local;
+mod localfs;
 mod menu;
 mod sftp;
 mod ssh;
@@ -121,7 +122,7 @@ pub fn run() {
         let _ = &app_handle;
         match event {
             #[cfg(target_os = "macos")]
-            tauri::RunEvent::Reopen { has_visible_windows: false, .. } => tray::reveal(&app_handle),
+            tauri::RunEvent::Reopen { has_visible_windows: false, .. } => tray::reveal(app_handle),
             tauri::RunEvent::Exit => awake::cleanup(),
             _ => {}
         }

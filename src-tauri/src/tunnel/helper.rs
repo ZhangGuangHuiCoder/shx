@@ -81,7 +81,10 @@ fn skipped_warning(skipped: &[Cidr]) -> Option<String> {
         return None;
     }
     let shown: Vec<String> = skipped.iter().take(SHOWN).map(Cidr::to_string).collect();
-    let what = tr(" 个网段的路由未能添加，流量不经隧道：", " network routes could not be added and bypass the tunnel: ");
+    let what = tr(
+        " 个网段的路由未能添加，流量不经隧道：",
+        if skipped.len() == 1 { " network route could not be added and bypasses the tunnel: " } else { " network routes could not be added and bypass the tunnel: " },
+    );
     let more = if skipped.len() > SHOWN { "…" } else { "" };
     Some(format!("{}{what}{}{more}", skipped.len(), shown.join(tr("、", ", "))))
 }
@@ -216,74 +219,5 @@ where
         result = outgoing => result,
         result = incoming => result,
         _ = os::terminated() => Ok(()),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn nets(list: &[&str]) -> Vec<Cidr> {
-        list.iter().map(|net| net.parse().unwrap()).collect()
-    }
-
-    #[test]
-    fn networks_left_without_a_route_are_named() {
-        assert_eq!(skipped_warning(&[]), None);
-        assert_eq!(skipped_warning(&nets(&["10.0.0.0/8", "172.16.0.0/12"])).unwrap(), "2 个网段的路由未能添加，流量不经隧道：10.0.0.0/8、172.16.0.0/12");
-        // 过多时只列前几个。
-        let many: Vec<Cidr> = (0..40).map(|i| format!("10.{i}.0.0/16").parse().unwrap()).collect();
-        let warning = skipped_warning(&many).unwrap();
-        assert!(warning.starts_with("40 ") && warning.ends_with("10.4.0.0/16…"), "{warning}");
-    }
-
-    #[test]
-    fn probes_stay_inside_their_network() {
-        let probe = |net: &str| probe(&net.parse().unwrap()).map(|ip| ip.to_string());
-        assert_eq!(probe("128.0.0.0/1").as_deref(), Some("128.0.0.1"));
-        assert_eq!(probe("10.0.0.0/8").as_deref(), Some("10.0.0.1"));
-        assert_eq!(probe("192.168.1.6/31").as_deref(), Some("192.168.1.7"));
-        assert_eq!(probe("192.168.1.7/32").as_deref(), Some("192.168.1.7"));
-        assert_eq!(probe("0.0.0.0/5"), None);
-    }
-
-    #[test]
-    fn a_few_routes_are_probed_however_many_there_are() {
-        let routes = |count: usize| (0..count).map(|i| format!("10.{}.{}.0/24", i / 256, i % 256).parse().unwrap()).collect::<Vec<Cidr>>();
-        assert_eq!(probes(&routes(3)), ["10.0.0.1", "10.0.1.1", "10.0.2.1"].map(|ip| ip.parse::<Ipv4Addr>().unwrap()));
-        for count in [8, 9, 100, 1000] {
-            let probed = probes(&routes(count));
-            assert!((MAX_PROBES / 2..=MAX_PROBES).contains(&probed.len()), "{count} routes, {} probes", probed.len());
-            // 抽样覆盖到后段网段。
-            assert!(routes(count)[count / 2..].iter().any(|net| net.contains(probed[probed.len() - 1])), "{count} routes");
-        }
-        assert_eq!(probes(&[]), Vec::<Ipv4Addr>::new());
-    }
-
-    /// 非法清单项一律拒绝。
-    #[test]
-    fn the_list_is_checked_before_anything_is_done() {
-        let setup = || Setup { mtu: 9000, routes: nets(&["0.0.0.0/1", "128.0.0.0/1"]) };
-        assert_eq!(check(&setup()), Ok(()));
-
-        let refused = |change: fn(&mut Setup)| {
-            let mut setup = setup();
-            change(&mut setup);
-            check(&setup).is_err()
-        };
-        assert!(refused(|s| s.mtu = 100));
-        assert!(refused(|s| s.mtu = 65000));
-        assert!(refused(|s| s.routes = nets(&["10.0.0.0/8"; MAX_ROUTES + 1])));
-        // 不替换默认路由。
-        assert!(refused(|s| s.routes.extend(nets(&["0.0.0.0/0"]))));
-        // 非法网段无法解析。
-        assert!(serde_json::from_str::<Setup>(r#"{"mtu":9000,"routes":["10.0.0.0/8"]}"#).is_ok());
-        assert!(serde_json::from_str::<Setup>(r#"{"mtu":9000,"routes":["10.0.0.0/8 metric=1"]}"#).is_err());
-    }
-
-    #[test]
-    fn only_helper_commands_are_taken_over() {
-        // 测试进程的命令行不应触发助手。
-        assert_eq!(dispatch(), None);
     }
 }

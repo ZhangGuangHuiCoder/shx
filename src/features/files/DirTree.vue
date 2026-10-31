@@ -8,6 +8,7 @@ import IconButton from "@/shared/ui-kit/IconButton.vue";
 import { t } from "@/shared/i18n";
 import { applyListing, ensurePath, expandable, findNode, pathChain, rootNode, visibleRows, type DirNode } from "@/features/files/dirTree";
 import { dim, line, lineFill } from "@/shared/ui-kit/styles";
+import { rootOf } from "@/shared/util";
 
 const props = defineProps<{
   current: string;
@@ -21,12 +22,14 @@ const emit = defineEmits<{ open: [path: string]; menu: [event: MouseEvent, node:
 const ROW_HEIGHT = 24;
 const INDENT = 14;
 
-const root = rootNode();
+// 换盘时由父组件换 key 重建，这里只取一次。
+const ROOT = rootOf(props.current);
+const root = rootNode(ROOT);
 /** 树为普通数据，变化后递增以触发更新。 */
 const version = ref(0);
-const expanded = shallowRef<ReadonlySet<string>>(new Set(["/"]));
+const expanded = shallowRef<ReadonlySet<string>>(new Set([ROOT]));
 const loading = shallowRef<ReadonlySet<string>>(new Set());
-const cursor = ref("/");
+const cursor = ref(ROOT);
 
 const rows = computed(() => {
   void version.value;
@@ -125,8 +128,8 @@ function retry() {
 }
 
 function collapseAll() {
-  expanded.value = new Set(["/"]);
-  cursor.value = "/";
+  expanded.value = new Set([ROOT]);
+  cursor.value = ROOT;
   scroller.value?.scrollTo({ top: 0 });
 }
 

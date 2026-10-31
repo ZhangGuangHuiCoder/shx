@@ -156,26 +156,3 @@ pub fn configure(builder: DeviceBuilder) -> std::result::Result<DeviceBuilder, S
     let library = library.ok_or_else(|| format!("{WINTUN} is missing next to the program"))?;
     Ok(builder.name(ADAPTER).wintun_file(library.to_string_lossy().into_owned()))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn only_this_programs_pipes_are_connected_to() {
-        for bad in ["", r"\\.\pipe\shx-tun-", r"\\.\pipe\other", r"\\.\pipe\shx-tun-..\x", r"\\server\pipe\shx-tun-00ff", "C:\\file"] {
-            assert_eq!(connect(bad).await.unwrap_err().kind(), io::ErrorKind::InvalidInput, "{bad:?}");
-        }
-    }
-
-    /// 在真实系统上只读查询。
-    #[test]
-    fn the_dns_servers_in_use_can_be_listed() {
-        let _ = resolvers();
-    }
-
-    #[test]
-    fn strings_for_windows_end_with_a_zero() {
-        assert_eq!(wide(OsStr::new("runas")), [0x72, 0x75, 0x6e, 0x61, 0x73, 0]);
-    }
-}

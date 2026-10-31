@@ -65,10 +65,19 @@ export function joinPath(dir: string, name: string): string {
   return dir.endsWith("/") ? dir + name : `${dir}/${name}`;
 }
 
+/**
+ * 路径所在根：POSIX 的 "/"，或 Windows 盘符根 "C:/"（本地会话可能给出盘符路径）。
+ * 不属于这两者时按 POSIX 处理。
+ */
+export function rootOf(path: string): string {
+  return /^[A-Za-z]:(\/|$)/.test(path) ? `${path.slice(0, 2)}/` : "/";
+}
+
 export function parentPath(path: string): string {
+  const root = rootOf(path);
   const trimmed = path.replace(/\/+$/, "");
   const i = trimmed.lastIndexOf("/");
-  return i <= 0 ? "/" : trimmed.slice(0, i);
+  return i < root.length ? root : trimmed.slice(0, i);
 }
 
 export function baseName(path: string): string {

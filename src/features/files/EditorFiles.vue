@@ -8,7 +8,7 @@ import { api, errorMessage, type FileEntry } from "@/shared/api";
 import { t } from "@/shared/i18n";
 import { useApp } from "@/shared/store";
 import { message, prompt } from "@/shared/ui";
-import { joinPath, parentPath, ruleMatcher } from "@/shared/util";
+import { joinPath, parentPath, rootOf, ruleMatcher } from "@/shared/util";
 import FileIcon from "@/shared/ui-kit/FileIcon.vue";
 import IconButton from "@/shared/ui-kit/IconButton.vue";
 import UiInput from "@/shared/ui-kit/UiInput.vue";
@@ -90,7 +90,7 @@ async function create(kind: "file" | "dir") {
 }
 
 /** 路径栏：面包屑，点击空白处可编辑路径。 */
-const crumbs = computed(() => pathChain(root.value).map((path) => ({ path, name: path === "/" ? "/" : path.slice(path.lastIndexOf("/") + 1) })));
+const crumbs = computed(() => pathChain(root.value).map((path) => ({ path, name: path === rootOf(path) ? path : path.slice(path.lastIndexOf("/") + 1) })));
 const crumbBar = ref<HTMLElement>();
 const editingPath = ref(false);
 const pathText = ref("");
@@ -155,7 +155,7 @@ watch(root, (dir) => {
           <template #prefix><Search :size="13" :class="dim" /></template>
         </UiInput>
         <div :class="toolGroup">
-          <IconButton size="tiny" :title="t('fm.up')" :disabled="root === '/'" @click="root = parentPath(root)"><ArrowUp :size="13" /></IconButton>
+          <IconButton size="tiny" :title="t('fm.up')" :disabled="root === rootOf(root)" @click="root = parentPath(root)"><ArrowUp :size="13" /></IconButton>
           <IconButton size="tiny" :title="t('common.refresh')" @click="reload"><RotateCw :size="13" :class="{ 'animate-spin': loading.size > 0 }" /></IconButton>
           <IconButton size="tiny" :title="t('fm.newFile')" @click="create('file')"><FilePlus :size="13" /></IconButton>
           <IconButton size="tiny" :title="t('fm.newFolder')" @click="create('dir')"><FolderPlus :size="13" /></IconButton>

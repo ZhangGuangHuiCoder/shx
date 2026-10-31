@@ -75,7 +75,7 @@ export function appMenu(): TopMenu[] {
   /** 单选设置：当前值打勾。 */
   const choices = <K extends keyof Settings>(key: K, options: [Settings[K], string][]): MenuNode[] =>
     options.map(([value, label]) => ({ type: "check", label, checked: () => settings[key] === value, action: () => (settings[key] = value) }));
-  const toggle = (key: "showHidden" | "showFiles" | "showStatusBar", label: MessageKey): MenuNode => ({
+  const toggle = (key: "showHidden" | "showFiles" | "showStatusBar" | "askOnClose", label: MessageKey): MenuNode => ({
     type: "check",
     label: t(label),
     checked: () => settings[key],
@@ -145,6 +145,8 @@ export function appMenu(): TopMenu[] {
       toggle("showHidden", "menu.showHidden"),
       SEPARATOR,
       toggle("showStatusBar", "menu.showStatusBar"),
+      SEPARATOR,
+      toggle("askOnClose", "menu.askOnClose"),
       SEPARATOR,
       termFontSize,
       { type: "submenu", label: t("menu.font"), items: choices("font", FONTS.map(([value, label]) => [value, t(label)])) },

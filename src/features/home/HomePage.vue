@@ -288,11 +288,11 @@ function onReorder(group: ViewGroup) {
             <h1 :class="[fg, 'm-0 text-2xl font-bold tracking-tight']">{{ t("home.title") }}</h1>
             <p v-if="query.trim()" :class="[dim, 'm-0 flex flex-wrap gap-x-4 gap-y-1']">{{ t("home.found", { count: matchCount }) }}</p>
             <p v-else :class="[dim, 'm-0 flex flex-wrap gap-x-4 gap-y-1']">
-              <span><b :class="[fg, 'font-semibold tabular-nums']">{{ app.profiles.length }}</b>{{ unitGap }}{{ t("home.stat.hosts") }}</span>
-              <span v-if="groupCount"><b :class="[fg, 'font-semibold tabular-nums']">{{ groupCount }}</b>{{ unitGap }}{{ t("home.stat.groups") }}</span>
+              <span><b :class="[fg, 'font-semibold tabular-nums']">{{ app.profiles.length }}</b>{{ unitGap }}{{ t("home.stat.hosts", { count: app.profiles.length }) }}</span>
+              <span v-if="groupCount"><b :class="[fg, 'font-semibold tabular-nums']">{{ groupCount }}</b>{{ unitGap }}{{ t("home.stat.groups", { count: groupCount }) }}</span>
               <span v-if="sessionCount" class="inline-flex items-center gap-2">
                 <i class="relative size-2 shrink-0 rounded-full bg-emerald-500"><i class="absolute inset-0 rounded-full bg-emerald-500 motion-safe:animate-ping" /></i>
-                <span><b :class="[fg, 'font-semibold tabular-nums']">{{ sessionCount }}</b>{{ unitGap }}{{ t("home.stat.sessions") }}</span>
+                <span><b :class="[fg, 'font-semibold tabular-nums']">{{ sessionCount }}</b>{{ unitGap }}{{ t("home.stat.sessions", { count: sessionCount }) }}</span>
               </span>
             </p>
           </section>

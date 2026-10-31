@@ -131,8 +131,8 @@ function chooseActions(event: MouseEvent) {
         </span>
       </template>
       <template v-else>
-        <span :class="[dim, 'flex shrink-0 items-center gap-2 px-3']">{{ app.profiles.length }}{{ unitGap }}{{ t("home.stat.hosts") }}</span>
-        <span v-if="sessionCount" class="flex shrink-0 items-center gap-2 px-3"><i :class="[statusDot, 'bg-emerald-500']" />{{ sessionCount }}{{ unitGap }}{{ t("home.stat.sessions") }}</span>
+        <span :class="[dim, 'flex shrink-0 items-center gap-2 px-3']">{{ app.profiles.length }}{{ unitGap }}{{ t("home.stat.hosts", { count: app.profiles.length }) }}</span>
+        <span v-if="sessionCount" class="flex shrink-0 items-center gap-2 px-3"><i :class="[statusDot, 'bg-emerald-500']" />{{ sessionCount }}{{ unitGap }}{{ t("home.stat.sessions", { count: sessionCount }) }}</span>
       </template>
       <span class="flex-1" />
       <TunnelStatus />

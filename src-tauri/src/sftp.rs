@@ -11,11 +11,16 @@ use tokio::io::AsyncWriteExt;
 
 use crate::error::{AppError, Result};
 use crate::i18n::tr;
+use crate::local;
+use crate::localfs;
 use crate::ssh::{sh_quote, AppState, Names, Session};
 
+// 本地 shell 会话（id 以 `local:` 开头）没有 SFTP，各命令据此转给 localfs，
+// 前端照旧用同一套 api，无需区分会话类型。
+
 /// 编辑器可打开的最大文件。
-const MAX_TEXT_SIZE: u64 = 4 * 1024 * 1024;
-const SEARCH_LIMIT: usize = 500;
+pub(crate) const MAX_TEXT_SIZE: u64 = 4 * 1024 * 1024;
+pub(crate) const SEARCH_LIMIT: usize = 500;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,8 +43,8 @@ pub struct FileEntry {
 
 #[derive(Serialize)]
 pub struct Listing {
-    path: String,
-    entries: Vec<FileEntry>,
+    pub(crate) path: String,
+    pub(crate) entries: Vec<FileEntry>,
 }
 
 pub fn join(dir: &str, name: &str) -> String {
@@ -54,7 +59,7 @@ pub fn base_name(path: &str) -> &str {
     path.trim_end_matches('/').rsplit('/').next().unwrap_or(path)
 }
 
-fn parse_id_file(text: &str, id_field: usize) -> HashMap<u32, String> {
+pub(crate) fn parse_id_file(text: &str, id_field: usize) -> HashMap<u32, String> {
     text.lines()
         .filter_map(|line| {
             let mut fields = line.split(':');
@@ -131,6 +136,9 @@ async fn resolve_link(sftp: &SftpSession, e: &mut FileEntry) {
 
 #[tauri::command]
 pub async fn sftp_list(state: State<'_, AppState>, id: String, path: String) -> Result<Listing> {
+    if local::is_local(&id) {
+        return localfs::list(path).await;
+    }
     list(&*state.session(&id)?, &path).await
 }
 
@@ -152,6 +160,9 @@ async fn list(session: &Session, path: &str) -> Result<Listing> {
 
 #[tauri::command]
 pub async fn sftp_stat(state: State<'_, AppState>, id: String, path: String) -> Result<FileEntry> {
+    if local::is_local(&id) {
+        return localfs::stat(path).await;
+    }
     let session = state.session(&id)?;
     let sftp = session.sftp().await?;
     let meta = sftp.symlink_metadata(&path).await?;
@@ -163,11 +174,17 @@ pub async fn sftp_stat(state: State<'_, AppState>, id: String, path: String) -> 
 
 #[tauri::command]
 pub async fn sftp_mkdir(state: State<'_, AppState>, id: String, path: String) -> Result<()> {
+    if local::is_local(&id) {
+        return localfs::mkdir(path).await;
+    }
     Ok(state.session(&id)?.sftp().await?.create_dir(path).await?)
 }
 
 #[tauri::command]
 pub async fn sftp_create_file(state: State<'_, AppState>, id: String, path: String) -> Result<()> {
+    if local::is_local(&id) {
+        return localfs::create_file(path).await;
+    }
     let sftp = state.session(&id)?.sftp().await?;
     let flags = OpenFlags::CREATE | OpenFlags::EXCLUDE | OpenFlags::WRITE;
     let mut file = sftp.open_with_flags(path, flags).await?;
@@ -182,6 +199,9 @@ pub async fn sftp_rename(
     from: String,
     to: String,
 ) -> Result<()> {
+    if local::is_local(&id) {
+        return localfs::rename(from, to).await;
+    }
     let sftp = state.session(&id)?.sftp().await?;
     if sftp.try_exists(&to).await? {
         return Err(AppError::msg(format!("{} {}", base_name(&to), tr("已存在", "already exists"))));
@@ -205,6 +225,9 @@ async fn remove_recursive(sftp: &SftpSession, path: String) -> Result<()> {
 
 #[tauri::command]
 pub async fn sftp_remove(state: State<'_, AppState>, id: String, paths: Vec<String>) -> Result<()> {
+    if local::is_local(&id) {
+        return localfs::remove(paths).await;
+    }
     let session = state.session(&id)?;
     // 大目录用 rm -rf 更快；无 shell 时回退 SFTP。
     let rm = session.exec(&format!("rm -rf -- {}", quote_all(&paths))).await;
@@ -242,6 +265,9 @@ pub async fn sftp_move(
     paths: Vec<String>,
     dest_dir: String,
 ) -> Result<()> {
+    if local::is_local(&id) {
+        return localfs::move_paths(paths, dest_dir).await;
+    }
     let session = state.session(&id)?;
     let sftp = session.sftp().await?;
     for path in paths {
@@ -272,6 +298,9 @@ pub async fn sftp_copy(
     paths: Vec<String>,
     dest_dir: String,
 ) -> Result<()> {
+    if local::is_local(&id) {
+        return localfs::copy(paths, dest_dir).await;
+    }
     let session = state.session(&id)?;
     let sftp = session.sftp().await?;
     for path in paths {
@@ -290,6 +319,9 @@ pub async fn sftp_chmod(
     mode: u32,
     recursive: bool,
 ) -> Result<()> {
+    if local::is_local(&id) {
+        return localfs::chmod(paths, mode, recursive).await;
+    }
     let session = state.session(&id)?;
     let mode = mode & 0o7777;
     if recursive {
@@ -317,22 +349,30 @@ pub async fn sftp_chown(
     group: String,
     recursive: bool,
 ) -> Result<()> {
-    let valid = |s: &str| s.chars().all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c));
-    if owner.is_empty() || !valid(&owner) || !valid(&group) {
-        return Err(AppError::msg(tr("所有者或所属组名称无效", "Invalid owner or group name")));
+    if local::is_local(&id) {
+        return localfs::chown(paths, owner, group, recursive).await;
     }
-    let spec = if group.is_empty() { owner } else { format!("{owner}:{group}") };
+    let spec = owner_spec(&owner, &group)?;
     let flag = if recursive { "-R " } else { "" };
-    let cmd = format!("chown {flag}{spec} -- {}", quote_all(&paths));
+    let cmd = format!("chown {flag}-- {spec} {}", quote_all(&paths));
     state.session(&id)?.exec(&cmd).await?.check()?;
     Ok(())
 }
 
+/// chown 的“所有者[:组]”参数；名称只允许安全字符，且不能以 - 开头（否则会被当作选项）。
+pub(crate) fn owner_spec(owner: &str, group: &str) -> Result<String> {
+    let valid = |s: &str| !s.starts_with('-') && s.chars().all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c));
+    if owner.is_empty() || !valid(owner) || !valid(group) {
+        return Err(AppError::msg(tr("所有者或所属组名称无效", "Invalid owner or group name")));
+    }
+    Ok(if group.is_empty() { owner.to_string() } else { format!("{owner}:{group}") })
+}
+
 #[derive(Debug, Serialize)]
 pub struct TextFile {
-    content: String,
+    pub(crate) content: String,
     /// 不可写时编辑器只读打开。
-    writable: bool,
+    pub(crate) writable: bool,
 }
 
 /// 以写方式试开（不创建不截断）探测可写性，文件不变。
@@ -350,8 +390,19 @@ async fn can_write(sftp: &SftpSession, path: &str) -> bool {
 
 #[tauri::command]
 pub async fn sftp_read_text(state: State<'_, AppState>, id: String, path: String) -> Result<TextFile> {
+    if local::is_local(&id) {
+        return localfs::read_text(path).await;
+    }
     let sftp = state.session(&id)?.sftp().await?;
     read_text(&sftp, &path).await
+}
+
+/// 拒绝有损解码，否则保存会损坏文件。
+pub(crate) fn decode_text(bytes: Vec<u8>) -> Result<String> {
+    String::from_utf8(bytes).map_err(|_| AppError::msg(tr(
+        "不是 UTF-8 文本文件，无法在内置编辑器中打开",
+        "Not a UTF-8 text file; it cannot be opened in the built-in editor",
+    )))
 }
 
 async fn read_text(sftp: &SftpSession, path: &str) -> Result<TextFile> {
@@ -362,12 +413,7 @@ async fn read_text(sftp: &SftpSession, path: &str) -> Result<TextFile> {
             "The file exceeds 4 MB; download it to edit",
         )));
     }
-    // 拒绝有损解码，否则保存会损坏文件。
-    let content = String::from_utf8(sftp.read(path).await?)
-        .map_err(|_| AppError::msg(tr(
-            "不是 UTF-8 文本文件，无法在内置编辑器中打开",
-            "Not a UTF-8 text file; it cannot be opened in the built-in editor",
-        )))?;
+    let content = decode_text(sftp.read(path).await?)?;
     Ok(TextFile { content, writable: can_write(sftp, path).await })
 }
 
@@ -378,6 +424,9 @@ pub async fn sftp_write_text(
     path: String,
     content: String,
 ) -> Result<()> {
+    if local::is_local(&id) {
+        return localfs::write_text(path, content).await;
+    }
     let sftp = state.session(&id)?.sftp().await?;
     let flags = OpenFlags::CREATE | OpenFlags::TRUNCATE | OpenFlags::WRITE;
     let mut file = sftp.open_with_flags(path, flags).await?;
@@ -388,6 +437,9 @@ pub async fn sftp_write_text(
 
 #[tauri::command]
 pub async fn sftp_du(state: State<'_, AppState>, id: String, path: String) -> Result<u64> {
+    if local::is_local(&id) {
+        return localfs::du(path).await;
+    }
     let out = state
         .session(&id)?
         .exec(&format!("du -sk -- {}", sh_quote(&path)))
@@ -454,7 +506,7 @@ fn items(names: &[String]) -> String {
     names.iter().map(|n| sh_quote(&format!("./{n}"))).collect::<Vec<_>>().join(" ")
 }
 
-fn compress_command(dir: &str, names: &[String], archive: &str, level: Option<u8>, remove_source: bool) -> Result<String> {
+pub(crate) fn compress_command(dir: &str, names: &[String], archive: &str, level: Option<u8>, remove_source: bool) -> Result<String> {
     let format = format_of(archive)?;
     let target = sh_quote(&format!("./{archive}"));
     let mut cmd = format!("cd {} && ", sh_quote(dir));
@@ -484,6 +536,9 @@ pub async fn sftp_compress(
     level: Option<u8>,
     remove_source: Option<bool>,
 ) -> Result<()> {
+    if local::is_local(&id) {
+        return localfs::compress(dir, names, archive, level, remove_source.unwrap_or(false)).await;
+    }
     let cmd = compress_command(&dir, &names, &archive, level, remove_source.unwrap_or(false))?;
     state.session(&id)?.exec(&cmd).await?.check()?;
     Ok(())
@@ -534,22 +589,30 @@ pub async fn sftp_extract(
     path: String,
     dest_dir: String,
 ) -> Result<()> {
+    if local::is_local(&id) {
+        return localfs::extract(path, dest_dir).await;
+    }
+    let cmd = extract_command(&path, &dest_dir)?;
+    state.session(&id)?.exec(&cmd).await?.check()?;
+    Ok(())
+}
+
+/// 解压命令，格式由扩展名决定；本地会话直接在本机执行同一套命令。
+pub(crate) fn extract_command(path: &str, dest_dir: &str) -> Result<String> {
     let lower = path.to_lowercase();
-    let (file, dest) = (sh_quote(&path), sh_quote(&dest_dir));
-    let cmd = if lower.ends_with(".zip") {
-        format!("unzip -o -q {file} -d {dest}")
+    let (file, dest) = (sh_quote(path), sh_quote(dest_dir));
+    if lower.ends_with(".zip") {
+        Ok(format!("unzip -o -q {file} -d {dest}"))
     } else if [".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz"]
         .iter()
         .any(|ext| lower.ends_with(ext))
     {
-        format!("tar -xf {file} -C {dest}")
+        Ok(format!("tar -xf {file} -C {dest}"))
     } else if lower.ends_with(".gz") {
-        format!("gunzip -k -f {file}")
+        Ok(format!("gunzip -k -f {file}"))
     } else {
-        return Err(AppError::msg(tr("不支持的压缩格式", "Unsupported archive format")));
-    };
-    state.session(&id)?.exec(&cmd).await?.check()?;
-    Ok(())
+        Err(AppError::msg(tr("不支持的压缩格式", "Unsupported archive format")))
+    }
 }
 
 /// 按文件名搜索（不区分大小写），最多 SEARCH_LIMIT 条。
@@ -560,6 +623,9 @@ pub async fn sftp_search(
     dir: String,
     pattern: String,
 ) -> Result<Vec<FileEntry>> {
+    if local::is_local(&id) {
+        return localfs::search(dir, &pattern).await;
+    }
     let session = state.session(&id)?;
     let cmd = format!(
         "find {} -iname {} 2>/dev/null | head -n {SEARCH_LIMIT}",
@@ -580,241 +646,4 @@ pub async fn sftp_search(
     }))
     .await;
     Ok(found.into_iter().flatten().collect())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::ssh::tests::{env, session};
-
-    #[test]
-    fn the_archive_name_decides_the_format_and_the_level_the_flags() {
-        let cmd = |archive: &str, level| packer(format_of(archive).unwrap(), level);
-        assert_eq!(cmd("a.tar.gz", None), "tar -czf");
-        assert_eq!(cmd("A.TGZ", None), "tar -czf");
-        assert_eq!(cmd("a.tar.bz2", None), "tar -cjf");
-        assert_eq!(cmd("a.tar.xz", None), "tar -cJf");
-        assert_eq!(cmd("a.tar", Some(9)), "tar -cf");
-        assert_eq!(cmd("a.zip", None), "zip -r -q");
-        assert_eq!(cmd("a.zip", Some(0)), "zip -r -q -0");
-        assert_eq!(cmd("a.tar.gz", Some(9)), "tar --use-compress-program='gzip -9' -cf");
-        // gzip 无 0 级；所有格式最高 9 级。
-        assert_eq!(cmd("a.tgz", Some(0)), "tar --use-compress-program='gzip -1' -cf");
-        assert_eq!(cmd("a.tar.xz", Some(40)), "tar --use-compress-program='xz -9' -cf");
-        assert!(format_of("a.rar").is_err() && format_of("a.gz").is_err() && format_of("archive").is_err());
-    }
-
-    /// 在本机执行真实命令，只需 sh、tar 和 zip。
-    #[cfg(unix)]
-    mod local {
-        use super::super::*;
-        use std::path::{Path, PathBuf};
-        use std::process::{Command, Output};
-
-        struct Work(PathBuf);
-
-        impl Work {
-            fn new() -> Self {
-                let dir = std::env::temp_dir().join(format!("shx-pack-test-{}", uuid::Uuid::new_v4()));
-                std::fs::create_dir_all(dir.join("my site").join("sub")).unwrap();
-                std::fs::write(dir.join("my site").join("sub").join("it's.txt"), b"hello").unwrap();
-                std::fs::write(dir.join("-dash.log"), b"x".repeat(4096)).unwrap();
-                Work(dir)
-            }
-            fn path(&self) -> &str {
-                self.0.to_str().unwrap()
-            }
-            fn sh(&self, script: &str) -> Output {
-                Command::new("sh").arg("-c").arg(script).env("TMPDIR", &self.0).output().unwrap()
-            }
-        }
-
-        impl Drop for Work {
-            fn drop(&mut self) {
-                let _ = std::fs::remove_dir_all(&self.0);
-            }
-        }
-
-        fn has(tool: &str) -> bool {
-            Command::new("sh").arg("-c").arg(format!("command -v {tool}")).output().unwrap().status.success()
-        }
-
-        fn names() -> Vec<String> {
-            vec!["my site".to_string(), "-dash.log".to_string()]
-        }
-
-        fn listing(archive: &Path) -> String {
-            let zip = archive.extension().unwrap() == "zip";
-            let out = if zip { Command::new("unzip").arg("-Z1").arg(archive).output() } else { Command::new("tar").arg("-tf").arg(archive).output() };
-            String::from_utf8(out.unwrap().stdout).unwrap()
-        }
-
-        #[test]
-        fn packing_leaves_one_archive_in_a_directory_of_its_own() {
-            let work = Work::new();
-            let mut cases = vec![("my site.tar.gz", None), ("my site.tar.gz", Some(9)), ("my site.tar", None), ("my site.tar.bz2", Some(1))];
-            if has("zip") && has("unzip") {
-                cases.extend([("my site.zip", None), ("my site.zip", Some(0))]);
-            }
-            for (archive, level) in cases {
-                let made = work.sh(&pack_dir_command());
-                let holder = pack_dir(&String::from_utf8(made.stdout).unwrap()).unwrap();
-                assert!(holder.starts_with(work.path()), "{holder}");
-                let out = work.sh(&pack_command(work.path(), &names(), &holder, archive, level).unwrap());
-                assert!(out.status.success(), "{archive} {level:?}: {}", String::from_utf8_lossy(&out.stderr));
-                assert_eq!(std::fs::read_dir(&holder).unwrap().count(), 1);
-                let listed = listing(&Path::new(&holder).join(archive));
-                assert!(listed.contains("my site/sub/it's.txt") && listed.contains("-dash.log"), "{archive}: {listed}");
-                std::fs::remove_dir_all(&holder).unwrap();
-            }
-
-            // 无内容或内容不全时应失败。
-            let holder = pack_dir(&String::from_utf8(work.sh(&pack_dir_command()).stdout).unwrap()).unwrap();
-            let missing = ["missing".to_string()];
-            assert!(!work.sh(&pack_command(work.path(), &missing, &holder, "x.tar.gz", None).unwrap()).status.success());
-            assert!(pack_command(work.path(), &[], &holder, "x.tar.gz", None).is_err());
-            assert!(pack_command(work.path(), &names(), &holder, "../x.tar.gz", None).is_err());
-            assert!(pack_command(work.path(), &names(), &holder, "x.rar", None).is_err());
-        }
-
-        #[test]
-        fn only_a_directory_made_for_packing_is_taken_from_the_output() {
-            assert_eq!(pack_dir("/var/tmp/shx-pack.Ab12Cd\n").as_deref(), Some("/var/tmp/shx-pack.Ab12Cd"));
-            // 忽略登录脚本的输出。
-            assert_eq!(pack_dir("Welcome!\r\n/var/tmp/shx-pack.x1\r\n").as_deref(), Some("/var/tmp/shx-pack.x1"));
-            // 后备 mktemp -d 生成的目录名。
-            assert_eq!(pack_dir("/tmp/tmp.Qw3rTy").as_deref(), Some("/tmp/tmp.Qw3rTy"));
-            for bad in ["", "\n", "/", "/home/me", "shx-pack.abc", "/var/tmp/shx-pack.x1\n/etc"] {
-                assert_eq!(pack_dir(bad), None, "{bad:?}");
-            }
-        }
-
-        #[test]
-        fn compressing_writes_next_to_the_data_and_can_remove_what_it_packed() {
-            let work = Work::new();
-            let out = work.sh(&compress_command(work.path(), &names(), "all.tar.gz", Some(1), false).unwrap());
-            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-            assert!(listing(&work.0.join("all.tar.gz")).contains("my site/sub/it's.txt"));
-            assert!(work.0.join("my site").exists() && work.0.join("-dash.log").exists());
-
-            // 打包失败时不动源文件。
-            let mut wrong = names();
-            wrong.push("missing".to_string());
-            assert!(!work.sh(&compress_command(work.path(), &wrong, "bad.tar.gz", None, true).unwrap()).status.success());
-            assert!(work.0.join("my site").exists() && work.0.join("-dash.log").exists());
-
-            let out = work.sh(&compress_command(work.path(), &names(), "moved.tar", None, true).unwrap());
-            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-            assert!(listing(&work.0.join("moved.tar")).contains("-dash.log"));
-            assert!(!work.0.join("my site").exists() && !work.0.join("-dash.log").exists());
-            assert!(work.0.join("all.tar.gz").exists(), "other files are not touched");
-        }
-
-        #[test]
-        fn a_zip_is_made_afresh_rather_than_added_to() {
-            if !(has("zip") && has("unzip")) {
-                return;
-            }
-            let work = Work::new();
-            let one = ["-dash.log".to_string()];
-            assert!(work.sh(&compress_command(work.path(), &names(), "a.zip", None, false).unwrap()).status.success());
-            assert!(work.sh(&compress_command(work.path(), &one, "a.zip", Some(9), false).unwrap()).status.success());
-            let listed = listing(&work.0.join("a.zip"));
-            assert!(listed.contains("-dash.log") && !listed.contains("my site"), "{listed}");
-        }
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn list_resolves_links_and_owner_names() {
-        let s = session().await;
-        let sftp = s.sftp().await.unwrap();
-        let dir = join(&env("SHX_TEST_DIR"), &format!("list-{}", uuid::Uuid::new_v4()));
-        sftp.create_dir(&dir).await.unwrap();
-        sftp.create_dir(join(&dir, "sub")).await.unwrap();
-        sftp.write_new(&dir, "a.txt", b"12345").await;
-        // OpenSSH 参数顺序：先目标后链接。
-        sftp.symlink(join(&dir, "sub"), join(&dir, "to-dir")).await.unwrap();
-        sftp.symlink(join(&dir, "missing"), join(&dir, "dangling")).await.unwrap();
-
-        let listing = list(&s, &dir).await.unwrap();
-        let get = |name: &str| listing.entries.iter().find(|e| e.name == name).unwrap();
-        assert_eq!(listing.entries.len(), 4);
-        assert_eq!((get("a.txt").kind, get("a.txt").size, get("a.txt").is_dir), ("file", 5, false));
-        assert_eq!((get("sub").kind, get("sub").is_dir), ("dir", true));
-        assert_eq!((get("to-dir").kind, get("to-dir").is_dir), ("link", true));
-        assert!(get("to-dir").link_target.as_deref().unwrap().ends_with("/sub"));
-        assert_eq!((get("dangling").kind, get("dangling").is_dir), ("link", false));
-        // root 必定在 /etc/passwd 中。
-        assert!(get("a.txt").uid.is_some());
-        assert_eq!(s.names.get().unwrap().users.get(&0).map(String::as_str), Some("root"));
-        assert_eq!(get("a.txt").path, join(&listing.path, "a.txt"));
-
-        assert_eq!(unique_path(&sftp, &dir, "a.txt").await.unwrap(), join(&dir, "a (1).txt"));
-        assert_eq!(unique_path(&sftp, &dir, "sub").await.unwrap(), join(&dir, "sub (1)"));
-        assert_eq!(unique_path(&sftp, &dir, "new").await.unwrap(), join(&dir, "new"));
-
-        remove_recursive(&sftp, dir.clone()).await.unwrap();
-        assert!(!sftp.try_exists(&dir).await.unwrap());
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn opening_a_file_to_edit_tells_whether_it_can_be_saved() {
-        let s = session().await;
-        let sftp = s.sftp().await.unwrap();
-        let dir = join(&env("SHX_TEST_DIR"), &format!("edit-{}", uuid::Uuid::new_v4()));
-        sftp.create_dir(&dir).await.unwrap();
-        sftp.write_new(&dir, "conf", "listen 80;\n".as_bytes()).await;
-        let path = join(&dir, "conf");
-        let chmod = |mode| sftp.set_metadata(&path, Metadata { permissions: Some(mode), ..Metadata::empty() });
-
-        let file = read_text(&sftp, &path).await.unwrap();
-        assert_eq!((file.content.as_str(), file.writable), ("listen 80;\n", true));
-
-        // 只读文件可查看，探测不改动内容。
-        chmod(0o444).await.unwrap();
-        let before = sftp.metadata(&path).await.unwrap().mtime;
-        let file = read_text(&sftp, &path).await.unwrap();
-        assert_eq!((file.content.as_str(), file.writable), ("listen 80;\n", false));
-        assert_eq!(sftp.read(&path).await.unwrap(), b"listen 80;\n");
-        assert_eq!(sftp.metadata(&path).await.unwrap().mtime, before);
-
-        // 不可读的文件无法打开。
-        chmod(0o000).await.unwrap();
-        assert!(read_text(&sftp, &path).await.is_err());
-        assert!(read_text(&sftp, &join(&dir, "missing")).await.is_err());
-
-        chmod(0o644).await.unwrap();
-        remove_recursive(&sftp, dir.clone()).await.unwrap();
-    }
-
-    trait WriteNew {
-        async fn write_new(&self, dir: &str, name: &str, data: &[u8]);
-    }
-
-    impl WriteNew for SftpSession {
-        async fn write_new(&self, dir: &str, name: &str, data: &[u8]) {
-            let flags = OpenFlags::CREATE | OpenFlags::TRUNCATE | OpenFlags::WRITE;
-            let mut file = self.open_with_flags(join(dir, name), flags).await.unwrap();
-            file.write_all(data).await.unwrap();
-            file.shutdown().await.unwrap();
-        }
-    }
-
-    #[test]
-    fn parses_passwd_and_group_lines() {
-        let users = parse_id_file("root:x:0:0:root:/root:/bin/sh\n# junk\nweb:x:33:33::/var/www:", 2);
-        assert_eq!(users.get(&0).map(String::as_str), Some("root"));
-        assert_eq!(users.get(&33).map(String::as_str), Some("web"));
-        assert_eq!(users.len(), 2);
-    }
-
-    #[test]
-    fn path_helpers() {
-        assert_eq!(join("/", "a"), "/a");
-        assert_eq!(join("/a", "b"), "/a/b");
-        assert_eq!(base_name("/a/b/"), "b");
-        assert_eq!(base_name("/a/b.txt"), "b.txt");
-    }
 }

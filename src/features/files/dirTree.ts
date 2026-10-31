@@ -1,5 +1,6 @@
 // 目录树的纯数据模型，不做 I/O。
 import type { FileEntry } from "@/shared/api.ts";
+import { joinPath, rootOf } from "@/shared/util.ts";
 
 export interface DirNode {
   path: string;
@@ -22,15 +23,18 @@ const collator = new Intl.Collator(undefined, { numeric: true });
 /** 自然排序（file2 在 file10 之前）。 */
 export const compareNames = (a: string, b: string) => collator.compare(a, b);
 
-export function rootNode(): DirNode {
-  return { path: "/", name: "/", kind: "dir", children: [], loaded: false };
+export function rootNode(root = "/"): DirNode {
+  return { path: root, name: root, kind: "dir", children: [], loaded: false };
 }
 
-/** 从 / 到 path 的各级路径（含自身）。 */
+/** 从根（/ 或 Windows 盘符根）到 path 的各级路径（含自身）。 */
 export function pathChain(path: string): string[] {
-  const out = ["/"];
-  let at = "";
-  for (const part of path.split("/")) {
+  const root = rootOf(path);
+  const out = [root];
+  // 去掉盘符，其余部分按 / 切分；根自带结尾斜杠，拼接时不重复。
+  const rest = root === "/" ? path : path.slice(2);
+  let at = root.slice(0, -1);
+  for (const part of rest.split("/")) {
     if (!part) continue;
     at += `/${part}`;
     out.push(at);
@@ -65,12 +69,11 @@ export function ensurePath(root: DirNode, path: string): DirNode {
 /** 用新列表更新子节点，保留仍存在的节点及其已加载内容。 */
 export function applyListing(node: DirNode, entries: FileEntry[]) {
   const known = new Map(node.children.map((child) => [child.path, child]));
-  const prefix = node.path === "/" ? "/" : `${node.path}/`;
   node.children = entries
     .filter((e) => e.isDir)
     .map((e) => {
       // 用父路径拼接而非条目路径：符号链接目录下返回的是解析后的位置，会导致重复。
-      const path = prefix + e.name;
+      const path = joinPath(node.path, e.name);
       const child = known.get(path);
       if (!child) return { path, name: e.name, kind: e.kind, children: [], loaded: false };
       child.kind = e.kind;

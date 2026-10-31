@@ -21,6 +21,8 @@ export interface Settings {
   commonUsernames: string[];
   /** 打开本地终端后自动执行的一条命令，空则不执行。 */
   localStartupCommand: string;
+  /** 关闭窗口时询问退出还是后台运行，即使没有会话。 */
+  askOnClose: boolean;
   theme: "dark" | "light" | "auto";
   font: "builtin" | "system";
   /** 自定义快捷键：动作 id → accelerator，只存改过的项。 */
@@ -85,6 +87,7 @@ export function defaultSettings(): Settings {
     favoriteCommands: [],
     commonUsernames: [...DEFAULT_COMMON_USERNAMES],
     localStartupCommand: "",
+    askOnClose: true,
     language: systemLocale(),
     theme: "dark",
     font: "builtin",

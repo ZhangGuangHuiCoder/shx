@@ -1,5 +1,6 @@
 // 关闭主窗口不再直接退出：可选择后台运行（保留会话与隧道）或断开退出。
-// 有会话或隧道时先询问；托盘“退出”也走同一流程（事件 app:quit）。
+// 有会话或隧道时先询问；没有时由设置 askOnClose（默认开）决定是否询问。
+// 托盘“退出”也走同一流程（事件 app:quit）。
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { TriangleAlert } from "@lucide/vue";
@@ -23,10 +24,10 @@ export function quitConsequences(): string {
   return lines.filter(Boolean).join("\n");
 }
 
-/** 询问如何处置；没有会话和隧道时没什么可留，直接退出。 */
+/** 询问如何处置；没有会话和隧道时，是否询问由 askOnClose 决定。 */
 function askQuit(): Promise<Choice | null> {
   const consequences = quitConsequences();
-  if (!consequences) return Promise.resolve("quit");
+  if (!consequences && !useApp().settings.askOnClose) return Promise.resolve("quit");
   if (!asking) {
     // 窗口可能已隐藏或最小化，先让询问可见。
     void revealWindow();
@@ -34,10 +35,11 @@ function askQuit(): Promise<Choice | null> {
       icon: TriangleAlert,
       danger: true,
       title: t("app.quitTitle"),
-      content: consequences,
+      content: consequences || t("app.quitEmpty"),
       actions: [
         { value: "background", label: t("app.quitBackground"), tone: "primary" },
-        { value: "quit", label: t("app.quitOk"), tone: "danger" },
+        // 没有可断开的连接时，不说“断开并退出”。
+        { value: "quit", label: t(consequences ? "app.quitOk" : "app.quitPlain"), tone: "danger" },
       ],
     }).finally(() => (asking = null));
   }

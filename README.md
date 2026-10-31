@@ -18,18 +18,26 @@ machine.
 ## Features
 
 - **Terminal** — xterm.js with search and multiple sessions; optional tmux keep-alive so programs
-  survive a dropped connection.
+  survive a dropped connection; a command can run automatically after connecting.
+- **Local terminal** — a shell on this computer alongside remote sessions, with an optional startup
+  command and a file manager for local files.
 - **Files** — an SFTP file manager that follows the terminal's `cd`: folder tree, favorites,
-  permission editing, compress and extract, built-in Monaco editor.
+  permission editing, compress and extract, built-in Monaco editor with tabs and language services
+  for JSON, CSS, HTML and TypeScript/JavaScript.
 - **Transfers** — an upload and download queue with pause, resume and retry; folders can be
   packed on the server before downloading.
-- **Command assistant** — nearly 300 built-in commands, with search, favorites and custom commands.
+- **Command assistant** — nearly 300 built-in Linux commands and nearly 90 for Windows, with search,
+  favorites and custom commands.
 - **Hosts** — groups, pinning, icons and colors; password, private key and ssh-agent
-  authentication.
+  authentication; suggestions from a list of common usernames.
 - **Tunnel** — forwards this computer's traffic through an SSH host, with per-network routing
   rules for what uses the tunnel and what connects directly; a remote network
   that overlaps the local one is taken over by the tunnel. No root access or extra software on
   the server.
+- **Hosts file manager** — named schemes for the system hosts file, switched on and off from the
+  dialog or the tray.
+- **Tray** — closing the window can leave sessions and the tunnel running in the background; keep
+  the computer awake, indefinitely or on a timer.
 - **Also** — light and dark themes, English and Chinese, encrypted configuration backups.
 
 ## Download
@@ -64,6 +72,9 @@ copies can no longer be updated.
   warning. `~/.ssh` and the system keychain are not read or written.
 - **Backup**: `.shxbak` files are encrypted with a key built into the app, so this is not
   password protection.
+- **Hosts file**: writing the system hosts file asks for administrator permission. Only the block
+  marked by Shell Xplore is replaced; everything outside it is left as it was. Schemes are stored
+  in `hosts.json` in the app's config directory and are not included in `.shxbak` backups.
 - **Tunnel**: needs administrator permission to start. The elevated helper only creates a virtual
   network interface and routes, which are removed when the tunnel is turned off or Shell Xplore quits; the
   SSH connection and credentials stay in the unprivileged main process.

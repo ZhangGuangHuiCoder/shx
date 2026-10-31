@@ -25,7 +25,7 @@ watch(
 const terminal = ref<InstanceType<typeof TerminalPane>>();
 const files = ref<InstanceType<typeof FileManager>>();
 const root = ref<HTMLElement>();
-/** 本地 shell 无 SFTP，不显示文件管理器。 */
+/** 本地 shell 会话（`local:` 前缀），后端走本地文件系统。 */
 const local = computed(() => isLocalSession(sessionId.value));
 /** 连接后执行的命令：远程取主机配置，本地 shell 取应用设置。 */
 const startup = computed(() => (local.value ? app.settings.localStartupCommand : profile.value?.startupCommand));
@@ -72,15 +72,14 @@ onBeforeUnmount(() => stopDrag?.());
       <div class="min-h-0 min-w-0 flex-1">
         <TerminalPane ref="terminal" :session-id="sessionId" :keep-alive="tab.keepAlive" :startup="startup" :active="active" @cwd="files?.terminalCwd($event)" @restarted="files?.shellRestarted()" @attached="setAttached" />
       </div>
-      <!-- 隐藏而不卸载，保留状态。本地 shell 没有远程文件系统，直接不挂载。 -->
+      <!-- 隐藏而不卸载，保留状态；本地 shell 同样显示本地文件系统。 -->
       <div
-        v-if="!local"
         v-show="app.settings.showFiles"
         class="shrink-0 border-zinc-900/10 bg-white/60 transition-colors duration-150 hover:bg-blue-500 dark:border-white/10 dark:bg-zinc-900/60 dark:hover:bg-blue-500"
         :class="layout === 'right' ? 'w-1 cursor-col-resize border-l' : 'h-1 cursor-row-resize border-t'"
         @mousedown="startDrag"
       />
-      <div v-if="!local" v-show="app.settings.showFiles" class="min-h-0 min-w-0 shrink-0" :style="paneSize">
+      <div v-show="app.settings.showFiles" class="min-h-0 min-w-0 shrink-0" :style="paneSize">
         <FileManager ref="files" :session-id="sessionId" :profile-id="tab.profileId" :active="active && app.settings.showFiles && tab.status === 'connected'" @send="terminal?.write($event)" />
       </div>
     </template>

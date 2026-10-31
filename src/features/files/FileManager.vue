@@ -18,11 +18,13 @@ import IconButton from "@/shared/ui-kit/IconButton.vue";
 import { openContextMenu, shortcut, type MenuEntry } from "@/shared/contextMenu";
 import { t, type MessageKey } from "@/shared/i18n";
 import { choose, confirm, message, prompt } from "@/shared/ui";
-import { baseName, formatMode, formatOctal, formatShortTime, formatSize, formatTime, isArchive, joinPath, parentPath, ruleMatcher, shellQuote } from "@/shared/util";
+import { baseName, formatMode, formatOctal, formatShortTime, formatSize, formatTime, isArchive, joinPath, parentPath, rootOf, ruleMatcher, shellQuote } from "@/shared/util";
+import { isLocalSession } from "@/features/session/local";
+import { IS_WINDOWS } from "@/shared/platform";
 import { uiFamily } from "@/shared/fonts";
 import { FILE_TREE_WIDTH, useApp } from "@/shared/store";
 import ArchiveDialog from "@/features/files/ArchiveDialog.vue";
-import { compareNames, type DirNode } from "@/features/files/dirTree";
+import { compareNames, pathChain, type DirNode } from "@/features/files/dirTree";
 import DirTree from "@/features/files/DirTree.vue";
 import EditorModal from "@/features/files/EditorModal.vue";
 import PropsDialog from "@/features/files/PropsDialog.vue";
@@ -35,6 +37,8 @@ const props = defineProps<{ sessionId: string; /** 收藏目录按主机保存�
 const emit = defineEmits<{ send: [data: string] }>();
 const app = useApp();
 const side = computed(() => app.settings.fileLayout === "right");
+/** 本地 shell 会话：浏览本机文件系统，没有上传/下载这类远程传输。 */
+const local = computed(() => isLocalSession(props.sessionId));
 
 const ROW_HEIGHT = 26;
 
@@ -187,11 +191,10 @@ async function goForward() {
 const editingPath = ref(false);
 const pathText = ref("");
 const pathInput = ref<InstanceType<typeof UiInput>>();
+/** 当前路径的根：POSIX 为 "/"，本地 Windows 盘符路径为 "C:/". */
+const rootPath = computed(() => rootOf(path.value));
 
-const crumbs = computed(() => {
-  const parts = path.value.split("/").filter(Boolean);
-  return parts.map((name, i) => ({ name, path: `/${parts.slice(0, i + 1).join("/")}` }));
-});
+const crumbs = computed(() => pathChain(path.value).slice(1).map((step) => ({ name: step.slice(step.lastIndexOf("/") + 1), path: step })));
 
 async function editPath() {
   pathText.value = path.value;
@@ -206,7 +209,10 @@ async function submitPath() {
   if (target && target !== path.value) await navigate(target);
 }
 
-const favorites = computed(() => app.profiles.find((p) => p.id === props.profileId)?.favoriteDirs ?? []);
+const profile = computed(() => app.profiles.find((p) => p.id === props.profileId));
+const favorites = computed(() => profile.value?.favoriteDirs ?? []);
+/** 收藏按主机保存，本地 shell 没有对应主机。 */
+const favoritable = computed(() => !!profile.value);
 const isFavorite = (dir: string) => favorites.value.includes(dir);
 
 function toggleFavorite(dir: string) {
@@ -219,7 +225,8 @@ function toggleFavorite(dir: string) {
 }
 
 /** 收藏/取消收藏菜单项；current 表示 dir 为当前目录。 */
-function favoriteEntry(dir: string, current = false): MenuEntry {
+function favoriteEntry(dir: string, current = false): MenuEntry | null {
+  if (!favoritable.value) return null;
   const on = isFavorite(dir);
   return {
     label: t(`fm.${on ? "unfavorite" : "favorite"}${current ? "Current" : ""}`),
@@ -229,20 +236,26 @@ function favoriteEntry(dir: string, current = false): MenuEntry {
   };
 }
 
+/** 过滤掉条件为假的菜单项。 */
+const when = (...list: (MenuEntry | false | null | undefined)[]) => list.filter((x): x is MenuEntry => !!x);
+
 function openFavorites(e: MouseEvent) {
   const dirs = favorites.value;
-  openContextMenu(e, [
-    { group: t(dirs.length ? "fm.favorites" : "fm.noFavorites") },
-    ...dirs.map((dir): MenuEntry => ({
-      label: baseName(dir) || "/",
-      hint: dir === "/" ? undefined : parentPath(dir),
-      icon: dir === path.value ? FolderOpen : Folder,
-      action: () => navigate(dir),
-      aside: { icon: X, title: t("fm.unfavorite"), action: () => toggleFavorite(dir) },
-    })),
-    "divider",
-    favoriteEntry(path.value, true),
-  ]);
+  openContextMenu(
+    e,
+    when(
+      { group: t(dirs.length ? "fm.favorites" : "fm.noFavorites") },
+      ...dirs.map((dir): MenuEntry => ({
+        label: baseName(dir) || "/",
+        hint: dir === rootPath.value ? undefined : parentPath(dir),
+        icon: dir === path.value ? FolderOpen : Folder,
+        action: () => navigate(dir),
+        aside: { icon: X, title: t("fm.unfavorite"), action: () => toggleFavorite(dir) },
+      })),
+      "divider",
+      favoriteEntry(path.value, true),
+    ),
+  );
 }
 
 const tree = ref<InstanceType<typeof DirTree>>();
@@ -276,21 +289,25 @@ function openTreeMenu(e: MouseEvent, node: DirNode) {
   const dir = node.path;
   const clip = clipboard.value;
   const open = tree.value?.isExpanded(dir);
-  openContextMenu(e, [
-    { heading: node.name, detail: dir === "/" ? undefined : dir, icon: () => h(FileIcon, { name: node.name, isDir: true, kind: node.kind === "link" ? "link" : "dir", size: 18 }) },
-    { label: t("fm.open"), icon: FolderOpen, disabled: dir === path.value, action: () => navigate(dir) },
-    { label: t(open ? "fm.treeCollapseOne" : "fm.treeExpandOne"), icon: open ? ChevronsDownUp : ChevronsUpDown, action: () => tree.value?.toggle(node) },
-    { label: t("common.refresh"), icon: RefreshCw, action: () => (dir === path.value ? refresh() : tree.value?.reload(dir)) },
-    "divider",
-    { label: t("fm.newFolder"), icon: FolderPlus, action: () => create("dir", dir) },
-    { label: clip ? t("fm.pasteCount", { count: clip.paths.length }) : t("common.paste"), icon: ClipboardPaste, disabled: !clip, action: () => paste(dir) },
-    { label: t("fm.download"), icon: Download, disabled: dir === "/", action: () => download([{ name: node.name, path: dir }]) },
-    { label: t("fm.packDownload"), icon: FolderArchive, disabled: dir === "/", action: () => packDownload([{ path: dir }]) },
-    "divider",
-    { label: t("fm.copyPath"), icon: ClipboardCopy, action: () => copyText(dir) },
-    { label: t("fm.cd"), icon: SquareTerminal, action: () => cdTerminal(dir) },
-    favoriteEntry(dir),
-  ]);
+  openContextMenu(
+    e,
+    when(
+      { heading: node.name, detail: dir === rootPath.value ? undefined : dir, icon: () => h(FileIcon, { name: node.name, isDir: true, kind: node.kind === "link" ? "link" : "dir", size: 18 }) },
+      { label: t("fm.open"), icon: FolderOpen, disabled: dir === path.value, action: () => navigate(dir) },
+      { label: t(open ? "fm.treeCollapseOne" : "fm.treeExpandOne"), icon: open ? ChevronsDownUp : ChevronsUpDown, action: () => tree.value?.toggle(node) },
+      { label: t("common.refresh"), icon: RefreshCw, action: () => (dir === path.value ? refresh() : tree.value?.reload(dir)) },
+      "divider",
+      { label: t("fm.newFolder"), icon: FolderPlus, action: () => create("dir", dir) },
+      { label: clip ? t("fm.pasteCount", { count: clip.paths.length }) : t("common.paste"), icon: ClipboardPaste, disabled: !clip, action: () => paste(dir) },
+      // 本地会话的文件已在磁盘上，没有下载与打包下载。
+      !local.value && { label: t("fm.download"), icon: Download, disabled: dir === rootPath.value, action: () => download([{ name: node.name, path: dir }]) },
+      !local.value && { label: t("fm.packDownload"), icon: FolderArchive, disabled: dir === rootPath.value, action: () => packDownload([{ path: dir }]) },
+      "divider",
+      { label: t("fm.copyPath"), icon: ClipboardCopy, action: () => copyText(dir) },
+      { label: t("fm.cd"), icon: SquareTerminal, action: () => cdTerminal(dir) },
+      favoriteEntry(dir),
+    ),
+  );
 }
 
 const selected = ref(new Set<string>());
@@ -307,7 +324,7 @@ function onScroll() {
 }
 
 /** 顶部“..”行的高度；该行不是条目，不可选中、不计数。根目录和搜索结果中没有。 */
-const lead = computed(() => (path.value && path.value !== "/" && found.value === null ? ROW_HEIGHT : 0));
+const lead = computed(() => (path.value && path.value !== rootPath.value && found.value === null ? ROW_HEIGHT : 0));
 
 const selection = computed(() => rows.value.filter((e) => selected.value.has(e.path)));
 
@@ -461,7 +478,8 @@ function edit(entry: FileEntry) {
 function open(entry: FileEntry) {
   if (entry.isDir) return void navigate(entry.path);
   if (editable.value(entry.name) || app.settings.otherDoubleClick === "edit") edit(entry);
-  else if (app.settings.otherDoubleClick === "download") void download([entry]);
+  // 本地会话没有“下载”：文件本来就在本机。
+  else if (!local.value && app.settings.otherDoubleClick === "download") void download([entry]);
 }
 
 const CONFLICTS: Conflict[] = ["overwrite", "skip", "rename", "resume"];
@@ -654,6 +672,8 @@ async function copyText(text: string) {
 }
 
 const follow = ref(false);
+/** 目录跟随靠注入 bash/zsh 钩子；本地 Windows 的 PowerShell 跑不了。 */
+const canFollow = computed(() => !(local.value && IS_WINDOWS));
 let injected = false;
 
 // 让 bash/zsh 每次提示符前用 OSC 7 报告工作目录；tmux 中需额外包装才能透传。
@@ -696,8 +716,6 @@ function openMenu(e: MouseEvent, index: number | null) {
   const searching = found.value !== null;
   const paths = items.map((item) => item.path);
   const clip = clipboard.value;
-  /** 过滤掉条件为假的菜单项。 */
-  const when = (...list: (MenuEntry | false | null | undefined)[]) => list.filter((x): x is MenuEntry => !!x);
 
   const size = items.reduce((n, item) => n + Math.max(0, sizeOf(item)), 0);
   const entries: MenuEntry[] = items.length
@@ -713,9 +731,9 @@ function openMenu(e: MouseEvent, index: number | null) {
         one && { label: t(one.isDir ? "fm.open" : "fm.openByRule"), icon: FolderOpen, hint: shortcut.enter, action: () => open(one) },
         one && !one.isDir && { label: t("common.edit"), icon: SquarePen, action: () => edit(one) },
         one && searching && { label: t("fm.reveal"), icon: FolderSearch, action: () => navigate(parentPath(one.path)) },
-        { label: t("fm.download"), icon: Download, action: () => download(items) },
+        !local.value && { label: t("fm.download"), icon: Download, action: () => download(items) },
         // 打包下载比逐个传小文件快得多。
-        !searching && items.some((item) => item.isDir) && { label: t("fm.packDownload"), icon: FolderArchive, action: () => packDownload(items) },
+        !local.value && !searching && items.some((item) => item.isDir) && { label: t("fm.packDownload"), icon: FolderArchive, action: () => packDownload(items) },
         "divider",
         { label: t("common.copy"), icon: Copy, hint: shortcut.mod("C"), action: () => (clipboard.value = { cut: false, paths }) },
         { label: t("common.cut"), icon: Scissors, hint: shortcut.mod("X"), action: () => (clipboard.value = { cut: true, paths }) },
@@ -734,19 +752,20 @@ function openMenu(e: MouseEvent, index: number | null) {
         "divider",
         { label: t("common.delete"), icon: Trash2, danger: true, hint: shortcut.delete, action: () => remove(items) },
       )
-    : [
+    : when(
         { label: t("fm.newFile"), icon: FilePlus, action: () => create("file") },
         { label: t("fm.newFolder"), icon: FolderPlus, action: () => create("dir") },
         "divider",
-        { label: t("fm.uploadFiles"), icon: Upload, action: () => pickUpload(false) },
-        { label: t("fm.uploadFolder"), icon: FolderUp, action: () => pickUpload(true) },
+        // 本地会话没有上传：文件已在磁盘上，用复制粘贴即可。
+        !local.value && { label: t("fm.uploadFiles"), icon: Upload, action: () => pickUpload(false) },
+        !local.value && { label: t("fm.uploadFolder"), icon: FolderUp, action: () => pickUpload(true) },
         { label: clip ? t("fm.pasteCount", { count: clip.paths.length }) : t("common.paste"), icon: ClipboardPaste, disabled: !clip, hint: shortcut.mod("V"), action: () => paste() },
         "divider",
         { label: t("common.refresh"), icon: RefreshCw, hint: shortcut.mod("R"), action: refresh },
         { label: t("fm.copyCurrentPath"), icon: ClipboardCopy, action: () => copyText(path.value) },
         { label: t("fm.cd"), icon: SquareTerminal, action: () => cdTerminal(path.value) },
         favoriteEntry(path.value, true),
-      ];
+      );
   openContextMenu(e, entries);
 }
 
@@ -798,7 +817,8 @@ onMounted(() => {
   void navigate(".");
 
   const drops = getCurrentWebview().onDragDropEvent(({ payload }) => {
-    if (!props.active || editing.value) return void (dropping.value = false);
+    // 本地会话没有上传，拖入文件不处理。
+    if (local.value || !props.active || editing.value) return void (dropping.value = false);
     dropping.value = payload.type === "enter" || payload.type === "over";
     if (payload.type === "drop") void upload(payload.paths);
   });
@@ -831,10 +851,10 @@ defineExpose({ terminalCwd, shellRestarted });
       <div :class="toolGroup">
         <IconButton :title="t('fm.back')" :disabled="!back.length" @click="goBack"><ArrowLeft :size="15" /></IconButton>
         <IconButton :title="t('fm.forward')" :disabled="!forward.length" @click="goForward"><ArrowRight :size="15" /></IconButton>
-        <IconButton :title="t('fm.up')" :disabled="path === '/'" @click="navigate(parentPath(path))"><ArrowUp :size="15" /></IconButton>
+        <IconButton :title="t('fm.up')" :disabled="path === rootPath" @click="navigate(parentPath(path))"><ArrowUp :size="15" /></IconButton>
         <IconButton :title="t('fm.home')" @click="navigate('.')"><House :size="15" /></IconButton>
         <IconButton :title="t('common.refresh')" @click="refresh"><RefreshCw :size="14" /></IconButton>
-        <IconButton :selected="isFavorite(path)" :title="t('fm.favorites')" @click="openFavorites">
+        <IconButton v-if="favoritable" :selected="isFavorite(path)" :title="t('fm.favorites')" @click="openFavorites">
           <Star :size="15" :fill="isFavorite(path) ? 'currentColor' : 'none'" />
         </IconButton>
       </div>
@@ -852,7 +872,7 @@ defineExpose({ terminalCwd, shellRestarted });
           @blur="editingPath = false"
         />
         <template v-else>
-          <span :class="[crumb, 'min-w-4 shrink']" @click="navigate('/')">/</span>
+          <span :class="[crumb, 'min-w-4 shrink']" @click="navigate(rootPath)">{{ rootPath === "/" ? "/" : rootPath.slice(0, 2) }}</span>
           <template v-for="(c, i) in crumbs" :key="c.path">
             <ChevronRight v-if="i > 0" :size="12" :class="[dim, 'shrink-0']" />
             <span :class="[crumb, 'min-w-4 shrink truncate']" @click="navigate(c.path)">{{ c.name }}</span>
@@ -865,8 +885,8 @@ defineExpose({ terminalCwd, shellRestarted });
         <template #prefix><Search :size="13" :class="dim" /></template>
       </UiInput>
       <div :class="toolGroup">
-        <IconButton :title="t('fm.upload')" @click="pickUpload(false)"><Upload :size="15" /></IconButton>
-        <IconButton :title="t('fm.downloadSelected')" :disabled="!selection.length" @click="download(selection)"><Download :size="15" /></IconButton>
+        <IconButton v-if="!local" :title="t('fm.upload')" @click="pickUpload(false)"><Upload :size="15" /></IconButton>
+        <IconButton v-if="!local" :title="t('fm.downloadSelected')" :disabled="!selection.length" @click="download(selection)"><Download :size="15" /></IconButton>
         <IconButton :title="t('fm.newFile')" @click="create('file')"><FilePlus :size="15" /></IconButton>
         <IconButton :title="t('fm.newFolder')" @click="create('dir')"><FolderPlus :size="15" /></IconButton>
         <IconButton :title="t('fm.deleteSelected')" :disabled="!selection.length" @click="remove(selection)"><Trash2 :size="15" /></IconButton>
@@ -876,7 +896,7 @@ defineExpose({ terminalCwd, shellRestarted });
         <IconButton :selected="app.settings.showHidden" :title="t('menu.showHidden')" @click="app.settings.showHidden = !app.settings.showHidden">
           <component :is="app.settings.showHidden ? Eye : EyeOff" :size="15" />
         </IconButton>
-        <IconButton :selected="follow" :title="t('fm.follow')" @click="toggleFollow"><LocateFixed :size="15" /></IconButton>
+        <IconButton v-if="canFollow" :selected="follow" :title="t('fm.follow')" @click="toggleFollow"><LocateFixed :size="15" /></IconButton>
         <IconButton :selected="app.fileTree.show" :title="t('fm.tree')" @click="app.fileTree.show = !app.fileTree.show"><PanelLeft :size="15" /></IconButton>
       </div>
     </div>
@@ -884,7 +904,7 @@ defineExpose({ terminalCwd, shellRestarted });
     <div ref="body" class="flex min-h-0 flex-1">
       <!-- 用隐藏而非移除，保留目录树状态。空间不足时优先收缩目录树。 -->
       <div v-show="app.fileTree.show" :class="[line, 'relative min-w-0 border-r', well]" :style="{ width: `${treeWidth}px` }">
-        <DirTree ref="tree" :current="path" :pending="pendingDir" :show-hidden="app.settings.showHidden" :load="loadDir" @open="navigate($event)" @menu="openTreeMenu" />
+        <DirTree ref="tree" :key="rootPath" :current="path" :pending="pendingDir" :show-hidden="app.settings.showHidden" :load="loadDir" @open="navigate($event)" @menu="openTreeMenu" />
         <div
           class="absolute inset-y-0 -right-0.5 z-10 w-1 cursor-col-resize transition-colors duration-150 hover:bg-blue-500 active:bg-blue-500"
           :title="t('fm.treeResize')"

@@ -1,4 +1,4 @@
-// 默认命令数据（逻辑在 commands.ts）。收录原则（部分由 commands.test.ts 检查）：
+// 默认命令数据（逻辑在 commands.ts）。收录原则：
 // - 面向服务器上的排查、运维和部署，常用且跨发行版通用；
 // - 不收界面已能完成的、过于简单的、具破坏性的命令；
 // - 待填部分写成 `<LIKE_THIS>`，此类命令只填入不执行；
@@ -132,7 +132,7 @@ export const BUILTIN: [group: GroupKey, command: string, zh: string, en: string]
   ["process", "ps -ef | grep <NAME>", "按关键字筛选进程", "Filter processes by keyword"],
   ["process", "pstree -p", "进程树", "Process tree"],
   ["process", "kill <PID>", "结束进程", "Stop a process"],
-  ["process", "kill -9 <PID>", "强制结束进程", "Kill a process"],
+  ["process", "kill -9 <PID>", "强制结束进程", "Force a process to stop"],
   ["process", "pkill <NAME>", "按名称结束进程", "Stop processes by name"],
   ["process", "lsof -p <PID>", "进程打开的文件", "Files a process has open"],
   ["process", "ls -l /proc/<PID>/cwd", "进程的工作目录", "Working directory of a process"],
@@ -178,7 +178,7 @@ export const BUILTIN: [group: GroupKey, command: string, zh: string, en: string]
   ["files", "tar -czf <NAME>.tar.gz <DIR>", "压缩为 tar.gz", "Pack a folder into a tar.gz"],
   ["files", "tar -czf <NAME>.tar.gz --exclude='<PATTERN>' <DIR>", "压缩并排除指定文件", "Pack, excluding a pattern"],
   ["files", "tar -xzf <FILE> -C <DIR>", "解压 tar.gz 到指定目录", "Unpack a tar.gz into a folder"],
-  ["files", "tar -xf <FILE>", "解压 tar 包（tar.gz、tar.xz 等）", "Unpack a tar archive (tar.gz, tar.xz, any)"],
+  ["files", "tar -xf <FILE>", "解压 tar 包（tar.gz、tar.xz 等）", "Unpack a tar archive (tar.gz, tar.xz and others)"],
   ["files", "tar -tzf <FILE>", "列出 tar.gz 的内容", "List the contents of a tar.gz"],
   ["files", "zip -r <NAME>.zip <DIR>", "压缩为 zip", "Pack a folder into a zip"],
   ["files", "unzip <FILE> -d <DIR>", "解压 zip 到指定目录", "Unpack a zip into a folder"],
@@ -186,7 +186,7 @@ export const BUILTIN: [group: GroupKey, command: string, zh: string, en: string]
   // ---- 文本 ----
   ["text", "grep -rn '<TEXT>' .", "在当前目录中搜索文本", "Search for text in this folder"],
   ["text", "grep -i '<TEXT>' <FILE>", "在文件中搜索（忽略大小写）", "Search a file, ignoring case"],
-  ["text", "grep -v '<TEXT>' <FILE>", "排除包含指定文本的行", "Lines not containing a text"],
+  ["text", "grep -v '<TEXT>' <FILE>", "排除包含指定文本的行", "Lines not containing the text"],
   ["text", "grep -A 3 -B 3 '<TEXT>' <FILE>", "搜索并显示上下文", "Search with surrounding lines"],
   ["text", "tail -f <FILE>", "跟踪文件末尾", "Follow the end of a file"],
   ["text", "tail -f <FILE> | grep --line-buffered '<TEXT>'", "跟踪并过滤新增的内容", "Follow a file, filtered"],
@@ -343,7 +343,7 @@ export const BUILTIN: [group: GroupKey, command: string, zh: string, en: string]
   ["container", "docker restart <CONTAINER>", "重启容器", "Restart a container"],
   ["container", "docker inspect <CONTAINER>", "容器详情", "Container details"],
   ["container", "docker cp <CONTAINER>:<PATH> .", "从容器中复制文件", "Copy a file out of a container"],
-  ["container", "docker run -d --name <NAME> -p <HOST_PORT>:<PORT> <IMAGE>", "后台运行容器并映射端口", "Run a container in the background with a port"],
+  ["container", "docker run -d --name <NAME> -p <HOST_PORT>:<PORT> <IMAGE>", "后台运行容器并映射端口", "Run a container in the background, publishing a port"],
   ["container", "docker pull <IMAGE>", "拉取镜像", "Pull an image"],
   ["container", "docker build -t <NAME>:<TAG> .", "构建镜像", "Build an image"],
   ["container", "docker save -o <NAME>.tar <IMAGE>", "导出镜像为文件", "Save an image to a file"],
@@ -373,7 +373,7 @@ export const BUILTIN: [group: GroupKey, command: string, zh: string, en: string]
   ["container", "kubectl get ingress -A", "所有 Ingress", "All ingresses"],
   ["container", "kubectl get events -n <NAMESPACE> --sort-by=.lastTimestamp", "命名空间的最近事件", "Recent events in a namespace"],
   ["container", "kubectl apply -f <FILE>", "应用配置文件", "Apply a manifest"],
-  ["container", "kubectl rollout restart deployment/<NAME> -n <NAMESPACE>", "滚动重启 Deployment", "Restart a deployment, rolling"],
+  ["container", "kubectl rollout restart deployment/<NAME> -n <NAMESPACE>", "滚动重启 Deployment", "Rolling restart of a deployment"],
   ["container", "kubectl rollout undo deployment/<NAME> -n <NAMESPACE>", "回滚到上一个版本", "Roll back to the previous revision"],
   ["container", "kubectl scale deployment/<NAME> --replicas=<N> -n <NAMESPACE>", "调整副本数", "Change the number of replicas"],
   ["container", "helm list -A", "已安装的 Helm 发布", "Installed Helm releases"],
@@ -404,7 +404,7 @@ export const BUILTIN: [group: GroupKey, command: string, zh: string, en: string]
   ["database", "sudo -u postgres psql", "以 postgres 用户登录", "Log in as the postgres user"],
   ["database", "psql -U <USER> -d <DATABASE> -c 'SELECT pid, state, query FROM pg_stat_activity;'", "PostgreSQL 当前的连接与查询", "PostgreSQL connections and queries"],
   ["database", "pg_dump -U <USER> <DATABASE> > <DATABASE>.sql", "备份 PostgreSQL 数据库", "Back up a PostgreSQL database"],
-  ["database", "redis-cli -h <HOST> -p <PORT>", "连接另一台 Redis", "Connect to a Redis server"],
+  ["database", "redis-cli -h <HOST> -p <PORT>", "连接 Redis 服务器", "Connect to a Redis server"],
   ["database", "redis-cli info", "Redis 状态概览", "Redis overview"],
   ["database", "redis-cli --scan --pattern '<PATTERN>' | head -n 20", "按模式查找 Redis 键", "Find Redis keys by pattern"],
   ["database", "redis-cli slowlog get 10", "Redis 慢查询", "Redis slow log"],
@@ -417,9 +417,9 @@ export const BUILTIN: [group: GroupKey, command: string, zh: string, en: string]
   ["git", "git log --oneline -n 20", "最近 20 次提交", "Last 20 commits"],
   ["git", "git branch -a", "所有分支", "All branches"],
   ["git", "git checkout <BRANCH>", "切换分支", "Switch branch"],
-  ["git", "git pull", "拉取并合并", "Pull"],
-  ["git", "git stash", "暂存当前改动", "Stash current changes"],
-  ["git", "git stash pop", "恢复暂存的改动", "Restore stashed changes"],
+  ["git", "git pull", "拉取并合并", "Pull and merge"],
+  ["git", "git stash", "贮藏当前改动", "Stash current changes"],
+  ["git", "git stash pop", "恢复贮藏的改动", "Restore stashed changes"],
   ["git", "git remote -v", "远程仓库地址", "Remote URLs"],
   ["git", "git clone <URL>", "克隆仓库", "Clone a repository"],
 ];
@@ -534,5 +534,5 @@ export const BUILTIN_WINDOWS: [group: GroupKey, command: string, zh: string, en:
   // ---- Web ----
   ["web", "C:\\Windows\\System32\\inetsrv\\appcmd.exe list site", "IIS 站点", "IIS sites"],
   ["web", "C:\\Windows\\System32\\inetsrv\\appcmd.exe list apppool", "IIS 应用程序池", "IIS application pools"],
-  ["web", "certutil -store My", "当前用户的个人证书", "Certificates in the user personal store"],
+  ["web", "certutil -store My", "本机的个人证书", "Certificates in the local machine's Personal store"],
 ];

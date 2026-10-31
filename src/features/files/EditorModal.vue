@@ -9,7 +9,7 @@ import { nextActive } from "@/features/files/editorTree";
 import { api, errorMessage } from "@/shared/api";
 import { checkIcon, openContextMenu, shortcut } from "@/shared/contextMenu";
 import { loadedMonoFamily } from "@/shared/fonts";
-import { t } from "@/shared/i18n";
+import { locale, t } from "@/shared/i18n";
 import { FONT_MAX, FONT_MIN, stepFont } from "@/shared/settings";
 import { useApp } from "@/shared/store";
 import { isDark } from "@/shared/theme";
@@ -243,7 +243,8 @@ const languageName = computed(() => {
 
 onMounted(async () => {
   try {
-    // 首次使用时加载，之后常驻。
+    // 首次使用时加载，之后常驻。Monaco 自身界面的语言须在它加载前设定，之后切换语言要重启才生效。
+    if (locale.value === "zh") await import("monaco-editor/nls/lang/zh-cn.js");
     monaco = (await import("@/features/files/monaco")).monaco;
   } catch (e) {
     return void message.error(errorMessage(e));

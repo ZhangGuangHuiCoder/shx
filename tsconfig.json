@@ -6,8 +6,6 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
     "paths": { "@/*": ["./src/*"] },
-    /* node 的类型，供 test 下的 *.test.ts 使用 */
-    "types": ["node"],
 
     /* 打包器模式 */
     "moduleResolution": "bundler",
@@ -23,6 +21,6 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue", "test/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

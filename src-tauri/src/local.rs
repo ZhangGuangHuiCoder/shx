@@ -12,7 +12,6 @@ use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{AppHandle, Emitter, State};
 
 use crate::error::{AppError, Result};
-use crate::i18n::tr;
 use crate::ssh::{AppState, SessionClosed};
 
 /// 本地会话 id 前缀。
@@ -148,9 +147,7 @@ pub fn local_connect(state: State<'_, AppState>) -> Result<String> {
         #[cfg(not(windows))]
         { "/bin/sh".to_string() }
     });
-    let home = dirs::home_dir().ok_or_else(|| {
-        AppError::msg(tr("找不到用户主目录", "Could not find the user home directory"))
-    })?;
+    let home = crate::localfs::home()?;
     let user = std::env::var("USER")
         .or_else(|_| std::env::var("USERNAME"))
         .unwrap_or_else(|_| home.file_name().unwrap_or_default().to_string_lossy().into_owned());

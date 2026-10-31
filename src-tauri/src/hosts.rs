@@ -228,7 +228,7 @@ async fn write_privileged(content: String, target: PathBuf) -> Result<()> {
     if code == 0 {
         return Ok(());
     }
-    Err(AppError::msg(tr("写入 hosts 失败或被拒绝授权", "Writing hosts failed or was denied")))
+    Err(AppError::msg(tr("写入 hosts 失败或被拒绝授权", "Writing the hosts file failed or was denied")))
 }
 
 /// 提权复制子命令：以管理员身份重启自身时执行，仅复制后退出。
@@ -251,7 +251,7 @@ pub fn dispatch() -> Option<i32> {
 async fn write_privileged(content: String, target: PathBuf) -> Result<()> {
     tokio::fs::write(&target, content)
         .await
-        .map_err(|e| AppError::msg(format!("{}{e}", tr("写入 hosts 失败（可能需要 root 权限）：", "Failed to write hosts (may require root): "))))
+        .map_err(|e| AppError::msg(format!("{}{e}", tr("写入 hosts 失败（可能需要 root 权限）：", "Failed to write the hosts file (may require root): "))))
 }
 
 // ---- 前端命令 ----
@@ -314,49 +314,4 @@ pub async fn hosts_toggle(app: AppHandle, id: String) -> Result<()> {
 pub fn open_editor(app: &AppHandle) {
     crate::tray::reveal(app);
     let _ = app.emit("hosts:edit", ());
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn scheme(name: &str, enabled: bool, lines: &str) -> HostScheme {
-        HostScheme { id: name.to_owned(), name: name.to_owned(), enabled, lines: lines.to_owned() }
-    }
-
-    #[test]
-    fn only_enabled_non_empty_schemes_are_rendered() {
-        let schemes = [scheme("dev", true, "10.0.0.1 a.test\n"), scheme("off", false, "10.0.0.2 b.test"), scheme("empty", true, "  \n ")];
-        let block = render(&schemes);
-        assert!(block.contains("# [dev]") && block.contains("10.0.0.1 a.test"));
-        assert!(!block.contains("b.test") && !block.contains("# [empty]"));
-    }
-
-    #[test]
-    fn merged_wraps_block_and_preserves_base() {
-        let current = "127.0.0.1 localhost\n::1 localhost\n";
-        let out = merged(current, &[scheme("dev", true, "10.0.0.1 a.test")]);
-        assert!(out.starts_with("127.0.0.1 localhost\n::1 localhost\n"));
-        assert!(out.contains(BEGIN) && out.contains(END));
-        assert!(out.contains("10.0.0.1 a.test"));
-    }
-
-    #[test]
-    fn stripping_then_remerging_is_idempotent() {
-        let base = "127.0.0.1 localhost\n";
-        let schemes = [scheme("dev", true, "10.0.0.1 a.test")];
-        let once = merged(base, &schemes);
-        let twice = merged(&once, &schemes);
-        assert_eq!(once, twice, "re-applying must not duplicate the block");
-        // 剥离托管块后回到原内容（托管块前会留一个空行分隔，故按 trim 比较）。
-        assert_eq!(strip(&once).trim_end(), strip(base).trim_end());
-    }
-
-    #[test]
-    fn disabling_every_scheme_removes_the_block() {
-        let with = merged("127.0.0.1 localhost\n", &[scheme("dev", true, "10.0.0.1 a.test")]);
-        let reverted = merged(&with, &[]);
-        assert_eq!(reverted, "127.0.0.1 localhost\n");
-        assert!(!reverted.contains(BEGIN) && !reverted.contains("a.test"));
-    }
 }

@@ -1,10 +1,10 @@
 //! 系统托盘：后台运行时把主窗口找回来，或退出应用；并提供“保持唤醒”开关与 Hosts 方案切换。
 //!
-//! 左键点击切换窗口显隐；菜单含：保持唤醒（可勾选）、定时子菜单、Hosts 子菜单、显示主窗口、退出。
+//! 左键单击弹出菜单（不切换窗口显隐）；菜单含：保持唤醒（可勾选）、定时子菜单、Hosts 子菜单、显示主窗口、退出。
 //! 退出交回前端走统一询问流程（事件 `app:quit`），以便照常断开会话与隧道。
 
 use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::tray::TrayIconBuilder;
 use tauri::{App, AppHandle, Emitter, Manager};
 
 use crate::awake;
@@ -73,7 +73,7 @@ pub fn build(app: &mut App) -> tauri::Result<()> {
     TrayIconBuilder::with_id("main")
         .icon(icon)
         .menu(&menu)
-        .show_menu_on_left_click(false)
+        .show_menu_on_left_click(true)
         .tooltip("Shell Xplore")
         .on_menu_event(|app, event| {
             let id = event.id.as_ref();
@@ -99,16 +99,6 @@ pub fn build(app: &mut App) -> tauri::Result<()> {
                         awake::enable_for(app, secs);
                     }
                 }
-            }
-        })
-        .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click {
-                button: MouseButton::Left,
-                button_state: MouseButtonState::Up,
-                ..
-            } = event
-            {
-                toggle(tray.app_handle());
             }
         })
         .build(&handle)?;
@@ -198,11 +188,11 @@ fn label_timer() -> String {
 }
 
 fn label_hosts() -> String {
-    i18n::tr("Hosts 管理", "Hosts").to_owned()
+    i18n::tr("Hosts 管理", "Hosts File").to_owned()
 }
 
 fn label_hosts_edit() -> String {
-    i18n::tr("编辑 Hosts…", "Edit Hosts…").to_owned()
+    i18n::tr("编辑 Hosts…", "Edit Hosts File…").to_owned()
 }
 
 fn label_show() -> String {
@@ -215,13 +205,13 @@ fn label_quit() -> String {
 
 fn label_duration(secs: u64) -> String {
     if i18n::is_english() {
-        if secs % 3600 == 0 {
+        if secs.is_multiple_of(3600) {
             let h = secs / 3600;
             format!("{h} hour{}", if h == 1 { "" } else { "s" })
         } else {
             format!("{} min", secs / 60)
         }
-    } else if secs % 3600 == 0 {
+    } else if secs.is_multiple_of(3600) {
         format!("{} 小时", secs / 3600)
     } else {
         format!("{} 分钟", secs / 60)
@@ -233,16 +223,5 @@ pub(crate) fn reveal(app: &AppHandle) {
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
-    }
-}
-
-fn toggle(app: &AppHandle) {
-    let Some(window) = app.get_webview_window("main") else {
-        return;
-    };
-    if window.is_visible().unwrap_or(false) {
-        let _ = window.hide();
-    } else {
-        reveal(app);
     }
 }
