@@ -178,8 +178,8 @@ fn elevate_and_wait(exe: &std::ffi::OsStr, parameters: &str) -> Result<u32> {
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
 
-    use windows_sys::Win32::Foundation::{CloseHandle, ERROR_CANCELLED, HANDLE, INFINITE};
-    use windows_sys::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject};
+    use windows_sys::Win32::Foundation::{CloseHandle, ERROR_CANCELLED, HANDLE};
+    use windows_sys::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject, INFINITE};
     use windows_sys::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW};
     use windows_sys::Win32::UI::WindowsAndMessaging::SW_HIDE;
 
